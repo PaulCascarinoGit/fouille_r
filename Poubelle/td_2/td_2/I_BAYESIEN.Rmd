@@ -41,8 +41,7 @@ TD 2 : II. CONSTRUCTION D'UN CLASSIFIEUR BAYESIEN NAIF EN R
 
 ::: {align="center"}
 Badr TAJINI -- ESIEE Paris\
-Source : Bertrand Roudier -- ESIEE Paris\
-__Code complété par Paul Cascarino et Mathis Quinio-Cosquer__
+Source : Bertrand Roudier -- ESIEE Paris
 :::
 
 </FONT></FONT>
@@ -192,67 +191,59 @@ Nous utilisons :
   
 *rmq*: Ne jamais oublier d'effacer  toutes les variables en mémoire au début de votre script (réinitialiser l'environnement)
 
-```{r, warning = FALSE}
-# On supprime les valeurs en mémoire
+
+```{r}
+# On efface les variables en mémoires
 rm(list=ls())
 
-# Chargement des packages
+# Importation des librairies
+library(tidyverse)
 library(kableExtra)
-library(caret)
-library(e1071)
+
 ```
 
-Nous chargeons notre dataframe d'exemple : 
 
 ```{r, echo = T}
+# data_test
 df = data.frame('Salaire' = c('< 30', '30 - 50', '30 - 50', '30 - 50', '> 50'),
 
-                'Impots' = c('< 20','< 20','< 20','> 20','> 20'),
+'Impots' = c('< 20','< 20','< 20','> 20','> 20'),
 
-                'Etudiant' = c('Oui','Non','Oui','Non','Non'),
+'Etudiant' = c('Oui','Non','Oui','Non','Non') ,
 
-                'Controle' = c('Non','Oui','Oui','Non','Oui'))
+'Controle' = c('Non','Oui','Oui','Non','Oui')
+
+)
+
+view(df)
+
 ```
-
 
 Affichage du tableau avec *kableExtra*
 
 ```{r}
-df %>% kbl(digits=3) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>% 
-       scroll_box( height = "250px")
+kbl(df)
 ```
-__Explication__\
-Ce bloc de code effectue plusieurs opérations initiales :
-1. `rm(list = ls())` : Supprime tous les objets présents dans l'environnement de travail R 
-  pour repartir sur une base propre.
-2. `library(kableExtra)` : Charge le package `kableExtra`, utilisé pour créer des tables 
-  formatées et améliorées dans R Markdown.
-3. `library('e1071')` et `library('caret')` : Charge les packages `e1071` et `caret`. `e1071` 
-  est souvent utilisé pour des méthodes statistiques, et `caret` pour le machine learning.
-
 
 
 On scinde le dataFrame et l'on crée un dataFrame X (prédicteur) et un vecteur des catégories à prédire (Y)
 
 ```{r, echo = T}
-Y <- df$Controle
+
+trainX <- subset(df, select = c('Salaire',	'Impots',	'Etudiant'))
+
+trainX
 ```
-__Explication__\
-On extrait la colonne Controle de notre dataframe 
-qui est la variable à prédire
 
 
 ```{r, echo = F}
-X <- subset(df, select = -c(Controle))
-```
-__Explication__\
-On extrait toutes nos colonnes sauf Controle
+trainy <- subset(df, select = c('Controle'))
 
-```{r}
-X %>% kbl(digits=3) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>% 
-       scroll_box( height = "250px")
+trainy
+```
+
+```{r, echo = T}
+# à compléter
 ```
 <hr>
 
@@ -282,16 +273,13 @@ Si vous éprouver des difficultés, il est possible d’utiliser dans un premier
 les résultas R sont les suivants;
 
 ```{r, echo = T}
-contingence<- lapply(X, function(x){  
-  temp_1   <- table(Y,x)        
-}) 
-contingence
+
+trainX$Salaire <- as.factor(trainX$Salaire)
+trainX$Salaire <- as.factor(trainX$Salaire)
+trainX$Salaire <- as.factor(trainX$Salaire)
+contingence <- 0
+view(contingence)
 ```
-__Explication__\
-Ce code crée une liste nommée `contingence`. 
-La fonction `lapply` est utilisée pour appliquer une fonction anonyme à chaque colonne de `X`.
-Cette fonction crée un tableau de contingence (`table`) entre la variable `Y` et chaque colonne de `X`. 
-Le résultat est une liste de tableaux de contingence pour chaque variable explicative dans `X`.
 
 ###### <FONT color='#000033'><FONT size =3> 2.1.2 Probabilités conditionnelles corrigées </FONT> </FONT> 
 
@@ -320,28 +308,8 @@ A partir des tableaux de contingence stockés dans la liste, nous obtenons la li
 Nous appelons cette nouvelle liste  *prop_cond*
 
 ```{r, echo = T}
-k <- length(unique(Y))
-m <- 1
-
-prob_cond <- lapply(X, function(x){  
-                temp_1 <- table(Y,x)         # tableau initiale 
-                s      <- apply(temp_1,1, sum) +  m * k  # calcul des sommes + pondération
-                mat    <- matrix(s, ncol = ncol(temp_1), nrow = nrow(temp_1))  # matrice des sommes
-                out <- (temp_1 + m)/mat  # calcul des nk = pondération de Laplace
-                }) # somme des controles
-
-prob_cond 
+# à compléter
 ```
-__Explication__\
-Ce script calcule les probabilités conditionnelles :
-1. `k` est le nombre de valeurs uniques dans `Y`.
-2. `m` est une constante (ici, 1) utilisée pour la pondération.
-3. La fonction `lapply` applique une fonction à chaque colonne de `X` qui :
-   - Crée un tableau de contingence entre `Y` et la colonne courante de `X`.
-   - Calcule des sommes pondérées pour chaque ligne.
-   - Crée une matrice de ces sommes.
-   - Calcule les probabilités conditionnelles avec une correction de Laplace (pondération `m`).
-
 
 
 ##### <FONT color='#000033'> <FONT size = 3> 2.2 Prédiction et Vraisemblance </FONT></FONT>
@@ -369,48 +337,37 @@ Pour éviter les problèmes de débordement de capacité mémoire nous calculero
 Le jeu des données test est le suivant (*data_test*) :
 
 ```{r, echo = T}
-data_test <- data.frame( 'Salaire' = c('30 - 50', '> 50','< 30'),
-                         'Impots'  = c('< 20', '< 20' ,'< 20')  ,
-                         'Etudiant' = c('Oui','Non' ,'Oui')
-                            )
+# à compléter
 ```
-__Explication__\
-Ce code crée un nouveau dataframe `data_test` contenant des données de test. Il comprend trois colonnes (`Salaire`, `Impots`, `Etudiant`) avec des valeurs spécifiques.
-```{r, echo = T}
-data_test %>% kbl(digits=3) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped')
-```
-__Explication__\
-Ce code utilise le dataframe `data_test` et l'affiche sous forme de tableau formaté à l'aide de la suite de fonctions de `kableExtra`. Les options de style sont similaires à celles utilisées précédemment, y compris le formatage à trois chiffres après la virgule, l'ajout de rayures pour améliorer la lisibilité et le positionnement central du tableau.
 
+```{r, echo = T}
+# à compléter
+```
 
 ###### <FONT color='#000033'><FONT size = 3>  2.2.1 Appartenance *a priori* </FONT></FONT>
 
 La probabilité d'appartenance à priori correspond à la probabilité qu'un individus ait un contrôle ou non. Elle est calculée à partir des données entraînement.  Les résultats sont stockés dans un vecteur *priori*. De plus, on stocke le "nom" des catégories dans un vecteur(ici il s'agit simplement de 'Oui' et 'Non')
 
 ```{r, echo = T}
-priori <- prop.table(table(Y))
-priori_labels  <- names(priori)
+# à compléter
 ```
-__Explication__\
-1. `priori <- prop.table(table(Y))` : Cette ligne crée une table de proportions (`prop.table`) à partir du tableau de fréquences de `Y`. Cela permet de calculer les probabilités a priori pour chaque catégorie unique dans `Y`.
-2. `priori_labels <- names(priori)` : Enregistre les noms des catégories uniques de `Y` dans une variable `priori_labels`.
-
 
 ```{r}
-priori
+# à compléter
 ```
-__Explication__\
-Ceci est un simple appel à la variable `priori` pour afficher ses valeurs. Rappelons que `priori` contient les probabilités a priori de chaque catégorie unique dans `Y`.
 ```{r}
-priori_labels
+# à compléter
 ```
-
-__Explication__\
-Cette ligne affiche simplement le contenu de la variable `priori_labels`, qui contient les noms des catégories uniques de `Y` déterminées précédemment. C'est utile pour vérifier les différentes catégories utilisées dans les calculs de probabilités.
 
 
 Les probabilités d'affectation pour chaque individus test sont stockées dans une matrice. Les résultats sont les suivants :
+
+```{r, echo = T}
+
+# à compléter
+
+```
+
 
 ```{r, echo = T}
 
@@ -445,43 +402,11 @@ L'ensemble des résultats sera stocké dans un tableau (data.frame)
 
 On choisira max(hmap) pour prédire la présence ou l'absence de contrôle. Les résultats seront résumés dans un data.frame
 
+```{r, echo = T}
 
-```{r}
-Test    <- NULL
-LnTest  <- NULL
-for (i_test in 1:nrow(data_test))    # sélection des individus du jeux test
-{ V    <- NULL
-  lnV  <- NULL
-  for(ic in 1:length(priori))        # sélection des Ck Oui
-    {   somme <- 0 ; prod <- 1
-        for(i in 1:ncol(X))          # sélection des tableau de proba conditionnelles
-          {
-           ar    <-  prob_cond[[i]]  # on extrait les tableau des probailiyés conditionnelles de la liste 
-           somme <- somme + log( ar[priori_labels[ic],data_test[i_test,i]])
-           prod  <- prod *   ar[priori_labels[ic],data_test[i_test,i]]
-      
-        }
-     V     <- c(V, priori[ic] * prod )
-    lnV   <- c(lnV, log(priori[ic]) + somme ) 
-  }  
-}
-Test  <- rbind(Test, V)    
-LnTest <- rbind(LnTest, lnV)    
-
+# à compléter
 ```
 
-__Explication__\
-Ce script complexe effectue les calculs suivants pour chaque ligne dans `data_test` :
-1. Itère sur chaque catégorie dans `priori`.
-2. Calcule la somme des logarithmes et le produit des probabilités conditionnelles pour chaque variable dans `X` par rapport à la catégorie actuelle.
-3. Multiplie la probabilité a priori de la catégorie par le produit des probabilités conditionnelles.
-4. Ajoute ces résultats dans les tableaux `V` et `lnV`.
-5. Les résultats pour chaque ligne de `data_test` sont stockés dans `Test` et `LnTest`.
-
-```{r}
-data.frame(LnTest)%>% kbl(digits=4) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped')
-```
 
 <br>
 <hr style="border: 1px  solid gray">
@@ -506,36 +431,16 @@ Cette fonction devra retourner la liste suivante:
 * prob_cond est la liste des tableaux des probabilités conditionnelles pour chaque variable
 * priori étant le tableau des probabilités d'appartenance au groupes (contrôle = Oui, Contrôle = Non)
 
-```{r}
-resulTest <- data.frame(data_test, 'Pred' = colnames(LnTest)[apply(LnTest,1,which.max)] ) 
+```{r, echo = T}
+# à compléter
 
-resulTest %>% kbl(digits=4) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped')
 ```
-
-__Explication__\
-Ce code combine les données de test (`data_test`) avec les prédictions effectuées (`Pred`), où `Pred` est calculé en prenant l'indice de la valeur maximale dans chaque ligne de `LnTest`. Les résultats sont ensuite formatés et affichés sous forme de tableau.
 
 Les résultats sont les suivants:
-```{r}
-Naive_Bayes <- function(X, Y, m = 1)
-{
-  # ...
-  return(out)
-}
-```
 
 ```{r}
-model_1 <- Naive_Bayes(X, Y, m=1)
-print(model_1)
+# à compléter
 ```
-
-__Explication__\
-Ceci crée un modèle Naïve Bayes en utilisant les données `X` et `Y`, avec `m = 1` pour la correction de Laplace. Le modèle résultant (`model_1`) est ensuite affiché.
-
-
-__Explication__\
-Cette fonction définit un classificateur Naïve Bayes personnalisé. Elle prend en entrée les variables explicatives `X`, la variable à prédire `Y` et un paramètre `m` pour la correction de Laplace. La fonction calcule les probabilités conditionnelles et les probabilités a priori, puis retourne ces valeurs.
 <br>
 
 #### <FONT color='#000033'><FONT size = 3> 3.2 Prédiction </FONT> 
@@ -548,45 +453,21 @@ Pour réaliser la prédiction, nous créons une fonction *Predict_Bay* qui retou
   * *X_pred* est le dataframe dont il faut prévoir les Y
 
 les résultats sont les suivants
-```{r}
-Predict_Bayes <- function(model, X_pred)
-{
-  # ...
-  return(out)
-}
+
+
+```{r, echo = T}
+# à compléter
 ```
-
-__Explication__\
-Cette fonction définit une méthode de prédiction pour le modèle Naïve Bayes. Elle prend un modèle Naïve Bayes préalablement ajusté et un ensemble de données de test (`X_pred`), puis calcule les prédictions en utilisant le modèle donné.
-
-##### Note :
-Oui, la fonction #19, qui définit `Predict_Bayes`, est effectivement similaire à une autre fonction dans mes réponses précédentes. Elle est semblable à la fonction #14, où un processus similaire de prédiction est appliqué. Dans les deux cas, les fonctions exécutent des étapes de prédiction basées sur le modèle Naïve Bayes :
-
-1. **Itération sur les données de test** : Les deux fonctions itèrent sur chaque ligne de l'ensemble de données de test.
-2. **Calcul des probabilités** : Elles calculent les probabilités en utilisant les probabilités conditionnelles et les probabilités a priori du modèle Naïve Bayes.
-3. **Logarithme des probabilités** : Les probabilités sont traitées en utilisant le logarithme pour éviter des problèmes de sous-débordement numérique (lorsque les probabilités sont très petites).
-4. **Combinaison des probabilités** : Les probabilités de chaque classe sont combinées (par exemple, en utilisant la somme des logarithmes) pour obtenir la probabilité finale.
-5. **Détermination de la classe prédictive** : La classe avec la plus haute probabilité (ou son logarithme) est choisie comme la prédiction pour chaque observation.
-
-La principale différence est que la fonction #19 est définie comme une fonction générique à part entière, prête à être utilisée sur différents ensembles de données ou modèles, tandis que la fonction #14 représente un script spécifique pour une tâche de prédiction donnée.
 
 
 ```{r}
-result_pred <- Predict_Bayes(model_1, data_test)
+# à compléter
 ```
 
-__Explication__\
-Ce code utilise la fonction `Predict_Bayes` pour faire des prédictions sur `data_test` en utilisant le modèle `model_1`.
 
-```{r}
-result_pred %>% kbl(digits=3) %>%    
-       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>% 
-       scroll_box( height = "250px")
+```{r, echo = T}
+# à compléter
 ```
-
-__Explication__\
-Ici, les résultats des prédictions (`result_pred`) sont formatés et affichés sous forme de tableau avec des options de style similaires aux précédentes.
-
 
  
  

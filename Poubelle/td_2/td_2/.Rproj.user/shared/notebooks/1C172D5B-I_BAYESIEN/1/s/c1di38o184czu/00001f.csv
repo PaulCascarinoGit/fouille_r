@@ -1,0 +1,4 @@
+"0",""
+"0","contingence <- as.factor(trainy$Controle)"
+"0",""
+"0","view(contingence)"

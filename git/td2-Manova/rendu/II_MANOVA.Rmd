@@ -40,6 +40,7 @@ III.TD 3 : Partie I - MANOVA
 ::: {align="center"}
 Badr TAJINI -- ESIEE Paris\
 Source : Bertrand Roudier -- ESIEE Paris
+__Code complété par Paul Cascarino et Mathis Quinio-Cosquer__
 :::
 
 </FONT></FONT>
@@ -126,6 +127,7 @@ library(help = "datasets")
 df <- read.csv("MANOVA_DATASET.csv", header = TRUE)
 head(df)
 ```
+__Explication :__ Le header = TRUE indique que le première ligne contient le nom des colonnes
 
 *  **Seconde étape :**
 
@@ -135,6 +137,7 @@ df$Class <- df$Site
 df$Site <- NULL
 head(df)
 ```
+__Explication :__ Permet plus de clareté, on supprime l'ancienne colonne.
 
 *  **Troisième étape :**
 
@@ -145,24 +148,23 @@ Les données sont les suivantes :
 df$Class <- as.factor(substr(df$Class,1,2))
 head(df)
 ```
+__Explication :__ On ne garde que les 2 premières lettres de nos facteurs
+
 *  **Quatrième étape :**
 
 ```{r,   warning = F}
-# à compléter - indice : data engineering
 save(df, file = 'MANOVA_DATASET.Rda')
 ```
+__Explication :__ Permet de conserver notre dataframe qui est plus propre
 
-*  **Cinquième étape :**
-
-```{r,   warning = F}
-# à compléter - indice : data engineering
-```
 
 *  **Sixième étape :**
 
 ```{r,echo = T,  warning = F}
 summary(df)
 ```
+__Explication :__ Nous remarquons dès à présent que la moyenne entre chaques classes
+diffère passant quand même de 13,80 à 0,1465. Cela est de bon présage pour une bonne manova ! 
 
 *  **Septième étape :**
 
@@ -211,7 +213,7 @@ X <- subset(df, select = -c(Class))
 head(X)
 
 ```
-
+__Explication :__ On retire notre variable Class pour conserver uniquement nos prédicteurs
 <br>
 
 * **Variable catégorielle sous forme d'un vecteur *Y* ** 
@@ -230,7 +232,8 @@ Y
 K <- length(levels(Y))
 K
 ```
-
+__Explication :__ levels(Y) donne le nom de classe de Y, ainsi il suffit de trouver 
+la longueur de ce vecteur
 <br>
 
 
@@ -264,7 +267,8 @@ NK
 GK <- lapply(XK, colMeans)
 GK
 ```
-
+__Explication :__ Nous voulons pour chaque groupe, sa moyenne d'où l'utilisation du lapply
+afin d'appliquer la fonction pour tous les groupes. Ce processus sera répété plusieurs fois
 <br>
 
  * **Vecteur *G* dont chaque élément est la moyenne générale (hors groupe) de chaque variable**
@@ -299,25 +303,29 @@ Pour y parvenir nous devons :
 Au finale, la matrice  (*SS_tot*) est la suivante   :
 
 ```{r I_Tot}
-# Transformer le dataframe en matrice (NxP)
+
+# Création dee X_matrix
 X_matrix <- X
 colnames(X_matrix) <- NULL
 rownames(X_matrix) <- NULL
 X_matrix <- as.matrix(X_matrix)
 X_matrix
 
-# Créer une matrice de même taille (NxP) dont chaque ligne correspond au vecteur G
+# Création d'une matrix ayant la moyenne de chaque variable hors grouep
 G_tot <- matrix(rep(as.numeric(G), N), nrow = N, ncol = P, byrow = TRUE)
 G_tot
 
-# Calculer la différence
+# On fait la différence
 Diff_matrix <- X_matrix - G_tot
 Diff_matrix
 
-# Effectuer la multiplication avec transposition du premier élément
+# On fait le produit matriciel de saa transposé à elle même afin d'obtenir SS_tot 
 SS_tot <- t(Diff_matrix) %*% Diff_matrix
 SS_tot
 ```
+__Explication :__ On convertit notre X en matrix puis on soustrait chacune de 
+ses variables par la moyenne de chaque variable hors groupe.
+On la mets ensuite au carré en effectuant un produit matriciel.
 
 #### <FONT color='#0066CC'><FONT size = 4> 4.2 Inertie intra classe </FONT></FONT>
 
@@ -335,12 +343,13 @@ SS_tot_intra <- list()
 
 for (key in names(XK)) {
   XK_matrix <- XK[[key]]
+  # On retire les noms de colonnes et lignes pour éviter un bug
   colnames(XK_matrix) <- NULL
   rownames(XK_matrix) <- NULL
   XK_matrix <- as.matrix(XK_matrix)
   GK_matrix <- matrix(rep(as.numeric(GK[[key]]), nrow(XK_matrix)), nrow = nrow(XK_matrix), byrow = TRUE)
-  # Calcul de la différence et stockage dans la liste
   Diff_matrix_inter <- XK_matrix - GK_matrix
+  # On retire les noms de colonnes et lignes pour éviter un bug
   colnames(Diff_matrix_inter) <- NULL
   rownames(Diff_matrix_inter) <- NULL
 
@@ -350,6 +359,8 @@ for (key in names(XK)) {
 }
 SS_tot_intra
 ```
+__Explication :__ Même principe que précedemment mais cette fois ci à l'intérieur de chaque classes.
+
  <br>
 
 
@@ -374,6 +385,8 @@ L'inertie inter classe s'obtient directement par différence.
 SS_inter <- SS_tot - SS_intra
 SS_inter
 ```
+__Explication :__ On sait que SS_tot = SS_inter + SS_intra
+Donc SS_inter <- SS_tot + SS_intra
 
 <br> 
 
@@ -390,6 +403,7 @@ SS_inter
 lambda <- det(SS_intra) / (det(SS_inter + SS_intra))
 lambda
 ```
+__Explication :__ Nous utilisons le lambda de notre test de Wilks
 
 #### <FONT color='#0066CC'><FONT size = 4> 5.2 Correction </FONT></FONT>
 
@@ -399,7 +413,7 @@ lambda
 correction <- -(N-1-(P+K)/2)*log(lambda)
 correction
 ```
-
+__Explication :__ notre correction correspond à la quantité de notre test de Wilks
 
 #### <FONT color='#0066CC'><FONT size = 4> 5.3 Conclusions </FONT></FONT>
 
@@ -410,13 +424,13 @@ Pour calculer la valeur critique on utilise la fonction *qchisq*. On prendra un 
 ```{r}
 degre <- K-1
 alpha <- 0.05
-ddl <- 15
+
 valeur_critique <- qchisq(1 - alpha, degre)
-probabilite <- 1 - pchisq(correction, ddl)
 valeur_critique
-probabilite
 
 ```
+__Explication :__ On utilise qchisq pour effectuer notre test de Wilks.
+
 La valeur critique est très inférieure à la valeur corrigée. En conclusion, on rejette l'hypothèse nulle d'égalité des moyennes. On peut donc affirmer que les catégories différent très significativement. 
 Au TD III partie 2, nous allons réaliser le même type de test sur des plans factoriels (Analyse Factorielle Discriminante) ce qui permettra d'obtenir des représentations graphiques de positionnement des  différents groupes et des variables associées qui sont essentielles pour de la fouille de données qu'elles soient réalisées en R ou en Python !
 
@@ -428,17 +442,28 @@ Au TD III partie 2, nous allons réaliser le même type de test sur des plans fa
 
 ### <FONT color='#0066CC'><FONT size = 4> 6 Validation  </FONT></FONT>
 
-Nous comparons maintenant les résultats avec la fonction manova* de R
+Nous comparons maintenant les résultats avec la fonction manova de R
 
 ```{r, echo = T}
 X
 Y
-manova_res <- manova(cbind(Al, Fe, Mg, Ca, Na) ~ Y, data = X)
+manova_res <- manova(as.matrix(X) ~ Y)
 summary(manova_res)
 ```
 
 * Comme on peut le constater, on retrouve bien la valeur corrigée (0.0123). Les tests ici sont différents (plus compliqués) mais conduisent aux mêmes résultats
 
+__Explication :__ Nous avons une valeur de test de 1.5539  ce qui nettement supérieur à 
+0,0123.
+Nous pensons que c'est parce que le test réalisé est le test de Pillai et non de Wilks.
+Ainsi regardons comment effectuer le bon test : 
+
+```{r, echo = T}
+X
+Y
+manova_res <- manova(as.matrix(X) ~ Y)
+summary(manova_res, test='Wilks')
+```
 
 ### <FONT color='#0066CC'><FONT size = 4> 7 Fonctions  </FONT></FONT>
 
@@ -499,9 +524,9 @@ Cette fonction nous servira au prochain TD lorsque nous réaliserons une analyse
 
     final$lambda <- det(final$SS_intra) / (det(final$SS_inter + final$SS_intra))
 
-    correction <- -(final$N - 1 - (final$P + final$K)/2) * log(final$lambda)
-    ddl <- 15
-    final$proba <- 1 - pchisq(correction, ddl)
+    correction <- -(final$N - 1 - (final$P + K)/2) * log(final$lambda)
+    degre <- (K-1)
+    final$proba <- qchisq(1 - alpha, degre)
 
     return(final)
   }
@@ -512,10 +537,9 @@ Cette fonction nous servira au prochain TD lorsque nous réaliserons une analyse
   test <- my_manova(X,Y)
   test
   ```
+  __Explication :__ Nous retrouvons bien les mêmes valeurs !
 
   ```{r, echo = T}
-  # Avec iris
-  #Chargement du datasetx
   iris_df <- iris
   head(iris_df)
 
@@ -524,7 +548,7 @@ Cette fonction nous servira au prochain TD lorsque nous réaliserons une analyse
   
   test_iris <- my_manova(X_iris,Y_iris)
   test_iris
-```
+  ```
 
 <br>
 
@@ -533,7 +557,7 @@ l'utilisation de la fonction *manova* de R conduit à la même valeur du lambda.
 Une fois de plus, vous avez bien travaillé !
 
 ```{r, echo = T}
-manova_res <- manova(cbind(Sepal.Length, Sepal.Width, Petal.Length, Petal.Width) ~ Y, data = X)
-summary(manova_res)
+  manova_iris <- manova(as.matrix(X_iris) ~ Y_iris)
+  summary(manova_iris, test='Wilks')
 ```
-
+__Explication :__ De même retrouvons bien les mêmes valeurs : 0,023439, cela valide notre fonction !

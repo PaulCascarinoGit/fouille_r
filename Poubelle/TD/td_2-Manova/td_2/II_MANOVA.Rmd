@@ -1,0 +1,532 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2023 -2024 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+III.TD 3 : Partie I - MANOVA
+:::
+
+</FONT></FONT>
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Badr TAJINI -- ESIEE Paris\
+Source : Bertrand Roudier -- ESIEE Paris
+:::
+
+</FONT></FONT>
+
+<hr style="border: 1px  solid gray">
+
+</hr>
+
+<DIV align = justify>
+
+### <FONT color='#0066CC'><FONT size = 4> 1. Introduction </FONT></FONT>
+
+Ce TD a pour objectif de réaliser une analyse de variance multivariée (MANOVA) en développant une fonction dédiée. Nous utilisons dans un premier temps un jeu de données simple (exemple vu en cours) ou tous les résultats intermédiaires vous sont fournis. 
+
+Une fois votre code intégré dans une fonction, vous vérifiez vos résultats en comparaison avec les résultats fournis par la fonction *manova* de R sur un jeu de données de volumétrie plus importante.
+
+Une partie du code que vous allez développer  nous servira pour la suite lorsque nous aborderons l'analyse factorielle discriminante ; principalement le calcul des inerties inter classes, intra classes et totales
+
+
+<br>
+
+<hr style="border: 1px  solid gray">
+
+
+
+### <FONT color='#0066CC'><FONT size = 4> 2 Rappels </FONT></FONT>
+
+La somme des carrés des écarts total (SCT = Inertie Totale) est la résultante (comme en ANOVA) de la sommes des carrés intra classes (SCresiduelle = SC Intra ) et de la somme des carrés inter classes (SC Ecart = SC Inter)
+\[\sum\limits_{i = 1}^n {{d^2}({x_i},g)}  = \sum\limits_{j = 1}^k {{n_j}{d^2}} ({g_j},g) + \sum\limits_{j = 1}^k {\sum\limits_{i = 1}^{{n_k}} {{d^2}({x_{i,j}},{g_j})} } \]
+
+Si nous considérons le jeu de données comme étant la population, nous pouvons directement estimer les variances inter classes et intra classes :
+\[\frac{1}{n}\sum\limits_{i = 1}^n {{d^2}({x_i},g)}  = \frac{1}{n}\sum\limits_{j = 1}^k {{n_j}{d^2}} ({g_j},g) + \frac{1}{n}\sum\limits_{j = 1}^k {\sum\limits_{i = 1}^{{n_k}} {{d^2}({x_{i,j}},{g_j})} } \]
+Pour réaliser le test de comparaison des groupes, nous calculons
+
+1. la somme des carrés Totaux:  *SST*
+2. La somme des carrés Intra:   *SS intra*
+3. La somme des carrés Inter par différence : *SS inter = SS Tot - SS intra*
+4. la ratio des déterminants: *Det(SS intra) / Det(SS total)*
+5. La valeur critique qui suit une distribution de *Chi-Deux* et qui nous permet de réaliser le test
+
+<br>
+
+<hr style="border: 1px  solid gray">
+
+### <FONT color='#0066CC'><FONT size = 4> 3 Pré-requis </FONT></FONT>
+
+Avant de calculer les inerties (SS), et pour rendre le code le plus générique possible, nous devons créer :
+
+  * Une variable *N*  qui correspond aux nombre totale d'individus
+  * Une variable *P* qui correspond aux nombres de variables 
+  * Un data frame des variables prédictives *X*
+  * Un vecteur *Y* de la variable catégorielle
+  * Une variable *K* qui correspond aux nombres de groupes (catégories)  
+  * Une liste *XK* dont chaque élément contient les individus de chaque groupes
+  * Un vecteur *NK*  qui correspond aux nombres d'individus par groupe
+  * Une liste *GK* dont chaque élément contient la moyenne des variables de chaque groupe (catégorie)
+  * Un vecteur *G* dont chaque élément est la moyenne générale (hors groupe) de chaque variable
+  
+
+Nous utilisons le fichier : *MANOVA_DATASET.csv*.  Ce jeu de données comprend 
+  
+  * 26 observations   
+  * 5 variables explicatives numériques 
+  * 1 variable factorielle comprenant 4 niveaux (catégories)
+  > Note : le fichier **MANOVA_DATASET.csv** doit être transformé en fichier **MANOVA_DATASET.Rda** pour être utilisé dans votre TD correctement.
+  
+rmq:  Il s'agit ici d'étudier l'existence d'une différence entre la composition chimique de différentes des poteries antiques  retrouvées dans des fouilles archéologiques.
+
+*  **Installation des packages nécessaires :**  
+```{r}
+rm(list=ls()) 
+
+```
+
+*  **Chargement des packages nécessaires :**
+
+```{r}
+library(kableExtra)
+```
+*  **Première étape :**
+```{r}
+# Récupération de nos données
+df <- read.csv("MANOVA_DATASET.csv", header = TRUE)
+head(df)
+```
+
+*  **Seconde étape :**
+
+```{r}
+# On renomme la colonne Site en Class
+df$Class <- df$Site
+df$Site <- NULL
+head(df)
+```
+
+*  **Troisième étape :**
+
+Les données sont les suivantes :
+
+```{r,echo = T,  warning = F}
+# Transformation de Class en factor
+df$Class <- as.factor(substr(df$Class,1,2))
+head(df)
+```
+*  **Quatrième étape :**
+
+```{r,   warning = F}
+# à compléter - indice : data engineering
+save(df, file = 'MANOVA_DATASET.Rda')
+```
+
+*  **Cinquième étape :**
+
+```{r,   warning = F}
+# à compléter - indice : data engineering
+```
+
+*  **Sixième étape :**
+
+```{r,echo = T,  warning = F}
+summary(df)
+```
+
+*  **Septième étape :**
+
+```{r,   warning = F}
+df %>% kbl(digits=3) %>%    
+       kable_styling(bootstrap_options = "striped", full_width = F, position = "center", latex_options = 'stripped') %>% 
+       scroll_box( height = "250px")
+```
+
+
+Résultat attendu du nouveau dataset après la création de notre pipeline ELT (Extract-Load-Transform) : 
+
+```{r, echo=FALSE, fig.width = 4, fig.height = 4, fig.align = 'center'}
+knitr::include_graphics('dataset.jpg')
+```
+<br>
+
+*  **Nombre total d'individus *N***
+
+
+```{r N}
+N <- nrow(df)
+paste("Nombre d'individus N = ",N)
+```
+
+
+<br>
+
+  * **Nombre de variables prédictives *P* **
+
+Le calcul du nombre de variables prédictives doit être réalisé de manière automatique. Pour y parvenir, on peut, par exemple, identifier les colonnes des variables numériques et calculer la longueur du vecteur des identifiants (utilisation des fonctions *which* et *sapply*)
+
+
+```{r P}
+P <- ncol(df)-1
+paste("Nombre de variables prédictives P = ", P)
+```
+
+<br>
+
+
+* **Le dataframe *X* des variables prédictives**
+
+```{r X}
+X <- subset(df, select = -c(Class))
+head(X)
+
+```
+
+<br>
+
+* **Variable catégorielle sous forme d'un vecteur *Y* ** 
+
+```{r Y}
+Y <- df$Class
+Y
+```
+
+<br>
+
+
+* **Variable *K* qui correspond aux nombres de groupes (catégories)**  
+
+```{r K}
+K <- length(levels(Y))
+K
+```
+
+<br>
+
+
+* **Liste *XK* dont chaque élément contient les individus de chaque groupes **
+
+Pour y parvenir, nous pouvons utiliser la fonction *split*. 
+Les éléments sont les suivants :
+
+
+```{r Xk_1 }
+XK <- split(X, Y)
+XK
+```
+
+<br>
+
+
+<br>
+
+
+  * **Vecteur *NK*  qui correspond aux nombres d'individus par groupe**
+
+```{r, NK}
+NK <- table(Y)
+NK
+```
+
+ * **Liste *GK* dont chaque élément contient la moyenne des variables de chaque groupe (catégorie)**
+
+```{r GK}
+GK <- lapply(XK, colMeans)
+GK
+```
+
+<br>
+
+ * **Vecteur *G* dont chaque élément est la moyenne générale (hors groupe) de chaque variable**
+ 
+```{r G}
+G <- lapply(X, mean)
+G
+```
+<br> 
+
+<hr style="border: 1px  solid gray">
+
+### <FONT color='#0066CC'><FONT size = 4> 4. Calcul des Inerties </FONT></FONT>
+
+#### <FONT color='#0066CC'><FONT size = 4> 4.1 Inertie totale </FONT></FONT>
+
+La Somme des carrés totaux (Inertie Totale) correspond à la sommes des carrés des distances entre l'ensemble des observations et la moyenne générale :
+
+\[{I_{total}} = \sum\limits_{i = 1}^n {{d^2}({x_i},g)} \] 
+
+Nous pouvons la calculer directement à l'aide du calcul matriciel suivant : 
+\[{I_{Tot}} = SST = {(X - G)^t} \times (X - G)\]
+
+Pour y parvenir nous devons :
+
+1. Transformer le dataframe en matrice (NxP)  
+2. Créer une matrice de même taille (NxP) dont chaque ligne correspond au vecteur G
+3. Calculer la différence 
+4. Effectuer la multiplication avec transposition du premier élément  
+
+
+Au finale, la matrice  (*SS_tot*) est la suivante   :
+
+```{r I_Tot}
+# Transformer le dataframe en matrice (NxP)
+X_matrix <- X
+colnames(X_matrix) <- NULL
+rownames(X_matrix) <- NULL
+X_matrix <- as.matrix(X_matrix)
+X_matrix
+
+# Créer une matrice de même taille (NxP) dont chaque ligne correspond au vecteur G
+G_tot <- matrix(rep(as.numeric(G), N), nrow = N, ncol = P, byrow = TRUE)
+G_tot
+
+# Calculer la différence
+Diff_matrix <- X_matrix - G_tot
+Diff_matrix
+
+# Effectuer la multiplication avec transposition du premier élément
+SS_tot <- t(Diff_matrix) %*% Diff_matrix
+SS_tot
+```
+
+#### <FONT color='#0066CC'><FONT size = 4> 4.2 Inertie intra classe </FONT></FONT>
+
+Nous allons, dans un premier temps calculer, pour chaque groupe, le somme des carrés des écarts entre les individus de ce groupe et la moyenne de chaque groupe. Les Inerties intra partielles sont stockées dans une liste (*SS_partiel_Intra*).  
+
+Pour chaque classe, nous calculons la SS intra (partielle) :
+\[S{S_{{\text{k}}{\text{, intra}}}} = \sum\limits_{i = 1}^{{n_k}} {{d^2}({x_{i,j}},{g_j})}  = {({X_{ik}} - {G_k})^t} \times ({X_{ik}} - {G_k})\]
+ 
+Les résultats sont les suivants: 
+
+
+```{r}
+# Création d'une liste vide pour stocker les différences
+SS_tot_intra <- list()
+
+for (key in names(XK)) {
+  XK_matrix <- XK[[key]]
+  colnames(XK_matrix) <- NULL
+  rownames(XK_matrix) <- NULL
+  XK_matrix <- as.matrix(XK_matrix)
+  GK_matrix <- matrix(rep(as.numeric(GK[[key]]), nrow(XK_matrix)), nrow = nrow(XK_matrix), byrow = TRUE)
+  # Calcul de la différence et stockage dans la liste
+  Diff_matrix_inter <- XK_matrix - GK_matrix
+  colnames(Diff_matrix_inter) <- NULL
+  rownames(Diff_matrix_inter) <- NULL
+
+  print(Diff_matrix_inter)
+
+  SS_tot_intra[[key]] <- t(Diff_matrix_inter) %*% Diff_matrix_inter
+}
+SS_tot_intra
+```
+ <br>
+
+
+Les K matrices sont ensuite additionnées pour obtenir l'inertie Intra (*SS_Intra*), 
+
+\[S{S_{{\text{intra }}}} = \sum\limits_{j = 1}^k {\sum\limits_{i = 1}^{{n_k}} {{d^2}({x_{i,j}},{g_j})} }  = \sum\limits_{j = 1}^k {{{({X_{ik}} - {G_k})}^t} \times ({X_{ik}} - {G_k})} \]
+
+```{r SS_Intra}
+SS_intra <- Reduce(`+`, SS_tot_intra)
+SS_intra
+```
+
+#### <FONT color='#0066CC'><FONT size = 4> 4.3 Inertie inter classe </FONT></FONT>
+
+L'inertie inter classe s'obtient directement par différence.
+
+\[S{S_{{\text{inter}}}} = S{S_{tot}} - S{S_{{\text{intra}}}}\]
+
+
+
+```{r SS_inter}
+SS_inter <- SS_tot - SS_intra
+SS_inter
+```
+
+<br> 
+
+<hr style="border: 1px  solid gray">
+
+### <FONT color='#0066CC'><FONT size = 4> 5. Inférence Statistique </FONT></FONT>
+
+#### <FONT color='#0066CC'><FONT size = 4> 5.1 Calcul du Lambda</FONT></FONT>
+
+\[\Lambda  = \frac{{\left| {{I_W}} \right|}}{{\left| {{I_B} + {I_W}} \right|}} = \frac{{\left| {S{S_{{\text{intra}}}}} \right|}}{{\left| {S{S_{{\text{inter}}}} + S{S_{{\text{intra}}}}} \right|}}\]
+
+
+```{r, lam}
+lambda <- det(SS_intra) / (det(SS_inter + SS_intra))
+lambda
+```
+
+#### <FONT color='#0066CC'><FONT size = 4> 5.2 Correction </FONT></FONT>
+
+\[ - \left( {n - 1 - \frac{{P + K}}{2}} \right)\ln (\Lambda )\]
+
+```{r}
+correction <- -(N-1-(P+K)/2)*log(lambda)
+correction
+```
+
+
+#### <FONT color='#0066CC'><FONT size = 4> 5.3 Conclusions </FONT></FONT>
+
+* La valeur corrigée suit un Chi-deux à P(K-1) degrés de liberté.
+Pour calculer la valeur critique on utilise la fonction *qchisq*. On prendra un risque de première espèce de 5%
+
+
+```{r}
+degre <- K-1
+alpha <- 0.05
+ddl <- 15
+valeur_critique <- qchisq(1 - alpha, degre)
+probabilite <- 1 - pchisq(correction, ddl)
+valeur_critique
+probabilite
+
+```
+La valeur critique est très inférieure à la valeur corrigée. En conclusion, on rejette l'hypothèse nulle d'égalité des moyennes. On peut donc affirmer que les catégories différent très significativement. 
+Au TD III partie 2, nous allons réaliser le même type de test sur des plans factoriels (Analyse Factorielle Discriminante) ce qui permettra d'obtenir des représentations graphiques de positionnement des  différents groupes et des variables associées qui sont essentielles pour de la fouille de données qu'elles soient réalisées en R ou en Python !
+
+
+<br> 
+
+<hr style="border: 1px  solid gray">
+
+
+### <FONT color='#0066CC'><FONT size = 4> 6 Validation  </FONT></FONT>
+
+Nous comparons maintenant les résultats avec la fonction manova* de R
+
+```{r, echo = T}
+X
+Y
+manova_res <- manova(cbind(Al, Fe, Mg, Ca, Na) ~ Y, data = X)
+summary(manova_res)
+```
+
+* Comme on peut le constater, on retrouve bien la valeur corrigée (0.0123). Les tests ici sont différents (plus compliqués) mais conduisent aux mêmes résultats
+
+
+### <FONT color='#0066CC'><FONT size = 4> 7 Fonctions  </FONT></FONT>
+
+A partir du code que vous avez développé, construire une fonction générique (*MANOVA*) qui retourne sous forme de listes :
+
+* SS_tot
+* SS_Intra
+* SS_Inter
+* Gk
+* G
+* NK
+* P
+* N
+* Lambda
+* La probabilité associés au test(cf cours)
+
+Nous testons cette fonction avec le fichier *iris* fourni par defaut dans R
+Cette fonction nous servira au prochain TD lorsque nous réaliserons une analyse factorielle discriminante
+
+```{r}
+my_manova <- function(X, Y) {
+  final <- list()
+
+  final$N <- nrow(X)
+  final$P <- ncol(X) - 1
+
+  K <- length(levels(Y))
+  XK <- split(X, Y)
+  final$NK <- table(Y)
+
+  final$GK <- lapply(XK, colMeans)
+
+  final$G <- lapply(X, mean)
+
+  # Transformer le dataframe en matrice (NxP)
+  X_matrix <- as.matrix(X)
+  G_tot <- matrix(rep(as.numeric(final$G), final$N),
+                  nrow = final$N,
+                  ncol = final$P,
+                  byrow = TRUE)
+  Diff_matrix <- X_matrix - G_tot
+  final$SS_tot <- t(Diff_matrix) %*% Diff_matrix
+
+  SS_tot_intra <- list()
+  for (key in names(XK)) {
+    XK_matrix <- as.matrix(XK[[key]])
+    GK_matrix <- matrix(rep(as.numeric(final$GK[[key]]),
+                            nrow(XK_matrix)),
+                        nrow = nrow(XK_matrix),
+                        byrow = TRUE)
+    # Calcul de la différence et stockage dans la liste
+    Diff_matrix_inter <- XK_matrix - GK_matrix
+    SS_tot_intra[[key]] <- t(Diff_matrix_inter) %*% Diff_matrix_inter
+  }
+  final$SS_intra <- Reduce(`+`, SS_tot_intra)
+
+  final$SS_inter <- final$SS_tot - final$SS_intra
+
+  final$lambda <- det(final$SS_intra) / (det(final$SS_inter + final$SS_intra))
+
+  correction <- -(final$N - 1 - (final$P + final$K)/2) * log(final$lambda)
+  ddl <- 15
+  final$proba <- 1 - pchisq(correction, ddl)
+
+  return(final)
+}
+
+# Exemple d'utilisation
+test <- my_manova(X, Y)
+print(test)
+```
+Le jeux de données est le suivant
+
+```{r}
+test <- my_manova(X,Y)
+test
+```
+
+```{r, echo = T}
+# à compléter
+```
+
+<br>
+
+
+l'utilisation de la fonction *manova* de R conduit à la même valeur du lambda...
+Une fois de plus, vous avez bien travaillé !
+
+```{r, echo = T}
+# à compléter
+```
+

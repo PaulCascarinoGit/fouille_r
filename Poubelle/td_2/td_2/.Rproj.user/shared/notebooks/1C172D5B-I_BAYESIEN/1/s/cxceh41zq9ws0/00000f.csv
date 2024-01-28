@@ -1,0 +1,3 @@
+"0","trainy <- subset(df, select = c('Controle'))"
+"0",""
+"0","trainy"
