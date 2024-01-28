@@ -1,0 +1,424 @@
+---
+title: "Classification Bayésienne"
+output:
+  html_document:
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+author: "Paul Cascarino et"
+date: "Décembre 2023"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Projet 1 : 
+
+## 1. Introduction
+
+### Les objectifs du projet
+Le but de ce projet est de faire de la recherche dans le 
+traitement du langage naturel et des émotions. Ainsi le principal
+objectif sera de faire de la prédiction sur les émotions à partir
+de textes.
+
+
+## 2. Chargement et exploration des données
+
+### Préparation et imports
+Dans un premier temps, nous effaçons la mémoire : 
+```{r}
+rm(list=ls())
+```
+
+Et faisons les chargements des packages nécessaires : 
+```{r}
+library(kableExtra)
+library(e1071)
+library(Matrix)
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+
+# Permet la tokenization : https://smltar.com/tokenization#types-of-tokens 
+library(tokenizers)
+# Permet les stop words : https://smltar.com/stopwords
+library(stopwords)
+# Permet le stemming : https://smltar.com/stemming
+library(SnowballC)
+# Permet laa lemmaatization : https://smltar.com/stemming#lemmatization
+library(spacyr)
+```
+#### Explication
+1. `library(kableExtra)` charge le package `kableExtra` qui est utilisé pour
+  créer des tables formatées
+2. `library(e1071)` et `library(caret)` : Charge les packages `e1071` et `caret`. 
+  `e1071` est souvent utilisé pour des méthodes statistiques, 
+  et `caret` pour le machine learning.
+3. `library(ggplot2)` charge le package `ggplot2` qui permet de créer 
+  facilement des graphiques en R
+4. `library(dplyr)` charge le package `dplyr` qui offre des fonctions
+  utiles et simples dans la manipulation de données
+5. `library(stringr)` charge le package `stringr` qui offre des fonctions
+  utiles dans la manipulation des chaînes de caractères
+
+
+
+### Chargement des données
+Les données sont récupérés sur le site kaggle à l'adresse : <https://www.kaggle.com/datasets/abdallahwagih/emotion-dataset>
+Nous pouvons ainsi récupérer le csv récupéré avec : 
+```{r}
+df <- read.csv('data/Emotion_classify_Data.csv')
+```
+Voici un aperçu de nos données : 
+```{r}
+head(df)
+```
+
+### Analyse exploratoire des données
+  
+```{r}
+dim(df)
+```
+
+Nous avons donc un dataframe de 5937 lignes et de 2 colonnes. 
+Nous avons donc un total de 5967 textes associés à des émotions.
+Dont les noms des colonnes sont `Comment`et `Emotion` : 
+```{r}
+colnames(df)
+```
+
+Nous remarquons qu'il n'y a pas d'éléments dupliqués : 
+```{r}
+sum(duplicated(df))
+```
+
+Nous requons aussi qu'il n'y a pas d'éléments nuls
+```{r}
+sum(is.na(df))
+```
+
+#### Regardons la colonne `Comment`, les textes :
+```{r}
+df$Comment[500:503]
+``` 
+
+Nous avons donc des textes écrits en anglais avec des mots qui semblent être 
+récurrents, tel que `feel` et ce qui tourne autour des sentiments.
+```{r}
+nchar_df <- data.frame(length = nchar(df$Comment))
+
+plot <- ggplot(nchar_df, aes(x = length)) + geom_histogram()
+
+plot
+```
+Nous remarquons avec la distribution que nous ne disposons probablement
+pas de textes avec des longueurs aberrantes.
+
+
+#### Regardons la colonne `Emotion`, les émotions :
+
+```{r}
+emotion <- factor(df$Emotion)
+levels(emotion)
+```
+nous avons donc 3 émotions de diposibles qui sont :
+`anger`, `fear`et `joy`.
+
+```{r}
+emotion_df <- data.frame(
+  Count = table(emotion)
+)
+colnames(emotion_df) <- c('Emotion', 'Count')
+
+emotion_df <- emotion_df %>%
+                mutate(proportion = Count / sum(emotion_df$Count) * 100) %>%
+                mutate(ypos = cumsum(proportion)- 0.5*proportion)
+
+pie_chart <- ggplot(emotion_df, aes(x='', y=proportion, fill=Emotion)) +
+              geom_bar(stat='identity', width=1) +
+              coord_polar('y', start=0) +
+              theme(legend.position='none') +
+              geom_text(aes(x ='', y=ypos, label=Emotion), color='white', size = 10)
+
+pie_chart
+```
+Nous remarquons que la répartition des 3 émotions est quasiment identiques.
+
+```{r}
+nchar_df <- data.frame(length = nchar(df$Comment), Emotion = df$Emotion)
+
+plot <- ggplot(nchar_df, aes(x=length, fill=Emotion)) +
+          geom_histogram(position='identity') + 
+          facet_wrap(~Emotion, scales='free')
+
+plot
+```
+Nous remarquons que la répartition des longeurs des chaînes de caractères
+sont similaires en fonction des émotions
+
+### Pourquoi l'utilisation de Naive Bayésienne
+
+## 3. Prétraitement des données
+
+### Suppression des caractères spéciaux et chiffres
+```{r}
+# On mets en minuscule nos commentaires (au cas où)
+df$Comment <- str_to_lower(df$Comment)
+
+nbr_comment_false_char <- sum( ! str_detect(df$Comment, '[[:alnum:]]') == TRUE)
+nbr_comment_num <- sum(str_detect(df$Comment, '^[0-9]') == TRUE)
+nbr_comment_with_punct <- sum(str_detect(df$Comment, '[[:punct:]]') == TRUE)
+
+cat('Nombre de caractères non alphanumériques :', nbr_comment_false_char,'\n')
+cat('Nombre de chiffres :', nbr_comment_num,'\n')
+cat('Nombre de caractères de ponctuation :', nbr_comment_with_punct,'\n')
+```
+##### Explication
+Nous avons 0 caractères non alphanumériques, 0 chiffres et 0 de ponctuations.
+Les caractères sont tous en minuscules, nous pouvons donc regarder si il y a des mots vides 
+et appliquer la tokenization. 
+
+### Tokenization, stemming ou lemmatization
+
+#### Tokenization
+
+https://smltar.com/tokenization
+
+Nous décidons dans un premier temps de faire une tokenization par mots car c est la méthode la 
+plus commune et que cela nous parait logique de travailler dans un premier temps avec les mots.
+```{r}
+df$tokenize_1words <- tokenize_words(df$Comment)
+df$tokenize_2words <- tokenize_ngrams(df$Comment, n=2)
+df$tokenize_3words <- tokenize_ngrams(df$Comment, n=3)
+df$tokenize_2words_min <- tokenize_ngrams(df$Comment, n=2, n_min=1)
+df$tokenize_3words_min <- tokenize_ngrams(df$Comment, n=3, n_min=1)
+head(df)
+```
+Nous décidons d appliquer différents N-gram tokenization afin d évaluer plus tard les différences sur 
+les performances de notre modèle.
+
+Nous pouvons maintenant observer les tokens les plus utilisés : 
+
+```{r}
+give_most_words <- function(df_tokens, col_names, n){
+  token_freq <- table(unlist(df_tokens[[col_names]]))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  plot <- ggplot(token_freq_df[0:n,], aes(x=reorder(token, -frequency), y=frequency)) +
+            geom_bar(stat = 'identity')
+  return(list(plot=plot, df=token_freq_df))
+}
+```
+Pour 1 mot : 
+```{r}
+result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
+result$plot
+```
+
+Pour 2 mots : 
+```{r}
+result <- give_most_words(df[, c('tokenize_2words', 'Emotion')], 'tokenize_2words', 10)
+result$plot
+```
+
+Pour 3 mots : 
+```{r}
+result <- give_most_words(df[, c('tokenize_3words', 'Emotion')], 'tokenize_3words', 10)
+result$plot
+```
+
+##### Explication
+
+Nous avons définit une fonction qui permet de retourner un graph des n premiers mots et longeurs
+fréquences d apparition dans notre df. 
+
+#### Stop words
+
+Nous décidons dans un premier temps d utiliser uniquement notre tokenization sur 1 mot.
+
+```{r}
+token <- df$tokenize_1words
+```
+Ainsi nous voullons retirer les mots inutiles, qui ne contiennent peu ou pas d informations
+Ils sont appelés : **stop words**
+
+Pour cela nous allons utiliser une liste déjà faite (= premade list). 
+Nous avons 3 exemples :
+
+```{r}
+head(stopwords(source = "smart"))
+head(stopwords(source = "snowball"))
+head(stopwords(source = "stopwords-iso"))
+```
+
+Regardons dans un premier temps notre stopwords(source = "stopwords-iso") qui retire les abréviaations le plus connus.
+Il suffit maintenant de retirer les stop words de la liste déjà faite à ceux de notre tokenization.
+
+```{r}
+head(token)
+result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
+result$plot
+
+# Supposons que votre liste de tokens s'appelle token_list
+filtered_token_list <- lapply(token, function(words) {
+  words[!(words %in% stopwords(source = "stopwords-iso"))]
+})
+
+head(filtered_token_list)
+
+filtered_token_freq <- table(unlist(filtered_token_list))
+filtered_token_freq_df <- data.frame(token = names(filtered_token_freq), frequency = as.numeric(filtered_token_freq))
+filtered_token_freq_df <- filtered_token_freq_df[order(-filtered_token_freq_df$frequency),]
+
+head(filtered_token_freq_df)
+plot <- ggplot(filtered_token_freq_df[1:10,], aes(x=reorder(token, -frequency), y=frequency)) +
+        geom_bar(stat = 'identity')
+
+plot
+```
+
+#### Stemming
+
+Le stemming permet de rapprocher les mots similaires tel quue 'feel' et 'feels' en un stem qui 
+est un mot de base (ex:'feel').
+
+Pour cela nous allons utiliser une bibliothèque préfaite : SnowballC 
+
+```{r}
+# filtered_token_list <- lapply(filtered_token_list, function(element) element$stem)
+
+# head(filtered_token_list)
+```
+
+#### Lemmatization
+
+
+#### Test 1 :
+
+#### TF-IDF
+
+On a :
+$$
+\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
+$$
+avec 
+
+- N : le nombre documents total
+- df(t) : le nombre de documents comportant le terme t
+
+Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
+Cela correspond à l importance du mot dans notre corpus de documents data.frame(..., row.names = NULL, check.rows = FALSE, check.names = TRUE, stringsAsFactors = default.stringsAsFactors())
+
+
+Nous avons ici le nombre d itérations des termes D mais pas le nombre de documents total
+```{r}
+df_idf_unique <- function(df){
+  unique <- lapply(df, unique)
+  token_freq <- table(unlist(unique))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
+  return(token_freq_df)
+}
+
+df_idf_unique(df$tokenize_1words)[0:20,]
+```
+Si nous comparons avec le comptage précédents, nous avons retiré les doublons dans chaque phrase,
+ce qui est nécessaire dans le df-idf
+```{r}
+result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
+head(result$df)
+```
+
+```{r}
+df_idf <- function(df){
+  unique <- df
+  token_freq <- table(unlist(unique))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
+  return(token_freq_df)
+}
+
+df_idf(df$tokenize_1words)[0:20,]
+```
+
+Nous avons maintenant besoin d une matrice Document terme afin de pouvoir utilser notre idf et ainsi notre classification bayésienne : 
+
+#### Test 2 : 
+
+```{r}
+spacy_install()
+
+spacy_initialize(entity = FALSE)
+```
+
+
+```{r}
+head(filtered_token_list)
+```
+
+
+#### Pourquoi ce feature engineering ?
+
+## 4. Entrainement du modèle bayésien
+
+```{r}
+df$final <- filtered_token_list
+df_bayesian <- df[,c('final', 'Emotion')]
+head(df_bayesian)
+
+# # Convertir la colonne "final" en une seule chaîne de texte
+# df_bayesian$text <- sapply(df_bayesian$final, paste, collapse = " ")
+
+# Créer une représentation texte-document sous forme de document-term matrix (dtm)
+dtm <- DocumentTermMatrix(VectorSource(df_bayesian$final))
+head(dtm)
+```
+
+```{r}
+# Assurez-vous que la colonne "Emotion" est de type factor
+df_bayesian$Emotion <- as.factor(df_bayesian$Emotion)
+
+# Division des données en ensemble d'entraînement et ensemble de test
+set.seed(123)
+split_index <- sample(1:nrow(df_bayesian), 0.8 * nrow(df_bayesian))
+train_data <- df_bayesian[split_index, ]
+test_data <- df_bayesian[-split_index, ]
+
+
+# Création d'un modèle Naive Bayes
+nb_model <- naiveBayes(Emotion ~ text, data = train_data)
+
+
+```
+
+```{r}
+# Prédictions sur l'ensemble de test
+predictions <- predict(nb_model, test_data)
+
+# Matrice de confusion
+conf_matrix <- table(predictions, test_data$Emotion)
+print(conf_matrix)
+
+# Calcul de l'exactitude (accuracy)
+accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste("Accuracy:", accuracy))
+```
+
+## 5. Evaluation du modèle
+### Les résultats
+### Les mesures d'évaluation du modèle
+### Les validations croisées effectuées 
+
+## 6. Amélioration et optimisation
+### Discussion des défis rencontrés
+### Raison de la performance du modèle
+### Amélioration
+
+## 7. Conclusion et travaux à venir
+### Conclusion
+### Améliorations possibles
