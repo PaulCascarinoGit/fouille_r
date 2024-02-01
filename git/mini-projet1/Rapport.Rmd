@@ -6,7 +6,7 @@ output:
     toc: yes
     toc_depth: 6
     toc_float: yes
-author: "Paul Cascarino et"
+author: "Paul Cascarino et Mathis Quinio-Cosquer"
 date: "Décembre 2023"
 ---
 ```{r setup, include=FALSE}
@@ -36,7 +36,6 @@ Et faisons les chargements des packages nécessaires :
 ```{r}
 library(kableExtra)
 library(e1071)
-library(Matrix)
 library(caret)
 library(ggplot2)
 library(dplyr)
@@ -44,14 +43,16 @@ library(stringr)
 
 # Permet la tokenization : https://smltar.com/tokenization#types-of-tokens 
 library(tokenizers)
-# Permet les stop words : https://smltar.com/stopwords
+
+# Permet l'utilisation de liste pour le stop-words : https://smltar.com/stopwords#premadestopwords
 library(stopwords)
-# Permet le stemming : https://smltar.com/stemming
+
+# Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
 library(SnowballC)
-# Permet laa lemmaatization : https://smltar.com/stemming#lemmatization
-library(spacyr)
 ```
-#### Explication
+
+__Explication :__
+
 1. `library(kableExtra)` charge le package `kableExtra` qui est utilisé pour
   créer des tables formatées
 2. `library(e1071)` et `library(caret)` : Charge les packages `e1071` et `caret`. 
@@ -114,9 +115,9 @@ plot <- ggplot(nchar_df, aes(x = length)) + geom_histogram()
 
 plot
 ```
+
 Nous remarquons avec la distribution que nous ne disposons probablement
 pas de textes avec des longueurs aberrantes.
-
 
 #### Regardons la colonne `Emotion`, les émotions :
 
@@ -156,6 +157,7 @@ plot <- ggplot(nchar_df, aes(x=length, fill=Emotion)) +
 
 plot
 ```
+
 Nous remarquons que la répartition des longeurs des chaînes de caractères
 sont similaires en fonction des émotions
 
@@ -176,7 +178,9 @@ cat('Nombre de caractères non alphanumériques :', nbr_comment_false_char,'\n')
 cat('Nombre de chiffres :', nbr_comment_num,'\n')
 cat('Nombre de caractères de ponctuation :', nbr_comment_with_punct,'\n')
 ```
-##### Explication
+
+__Explication :__
+
 Nous avons 0 caractères non alphanumériques, 0 chiffres et 0 de ponctuations.
 Les caractères sont tous en minuscules, nous pouvons donc regarder si il y a des mots vides 
 et appliquer la tokenization. 
@@ -195,7 +199,7 @@ df$tokenize_2words <- tokenize_ngrams(df$Comment, n=2)
 df$tokenize_3words <- tokenize_ngrams(df$Comment, n=3)
 df$tokenize_2words_min <- tokenize_ngrams(df$Comment, n=2, n_min=1)
 df$tokenize_3words_min <- tokenize_ngrams(df$Comment, n=3, n_min=1)
-head(df)
+head(df$tokenize_1words)
 ```
 Nous décidons d appliquer différents N-gram tokenization afin d évaluer plus tard les différences sur 
 les performances de notre modèle.
@@ -229,74 +233,39 @@ Pour 3 mots :
 result <- give_most_words(df[, c('tokenize_3words', 'Emotion')], 'tokenize_3words', 10)
 result$plot
 ```
-
-##### Explication
+__Explication :__
 
 Nous avons définit une fonction qui permet de retourner un graph des n premiers mots et longeurs
 fréquences d apparition dans notre df. 
 
-#### Stop words
-
-Nous décidons dans un premier temps d utiliser uniquement notre tokenization sur 1 mot.
+#### Regardons maintenant les stop words 
 
 ```{r}
-token <- df$tokenize_1words
-```
-Ainsi nous voullons retirer les mots inutiles, qui ne contiennent peu ou pas d informations
-Ils sont appelés : **stop words**
-
-Pour cela nous allons utiliser une liste déjà faite (= premade list). 
-Nous avons 3 exemples :
-
-```{r}
-head(stopwords(source = "smart"))
-head(stopwords(source = "snowball"))
-head(stopwords(source = "stopwords-iso"))
-```
-
-Regardons dans un premier temps notre stopwords(source = "stopwords-iso") qui retire les abréviaations le plus connus.
-Il suffit maintenant de retirer les stop words de la liste déjà faite à ceux de notre tokenization.
-
-```{r}
-head(token)
-result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
-result$plot
-
-# Supposons que votre liste de tokens s'appelle token_list
-filtered_token_list <- lapply(token, function(words) {
-  words[!(words %in% stopwords(source = "stopwords-iso"))]
-})
-
-head(filtered_token_list)
-
-filtered_token_freq <- table(unlist(filtered_token_list))
-filtered_token_freq_df <- data.frame(token = names(filtered_token_freq), frequency = as.numeric(filtered_token_freq))
-filtered_token_freq_df <- filtered_token_freq_df[order(-filtered_token_freq_df$frequency),]
-
-head(filtered_token_freq_df)
-plot <- ggplot(filtered_token_freq_df[1:10,], aes(x=reorder(token, -frequency), y=frequency)) +
-        geom_bar(stat = 'identity')
-
-plot
+temp_df <- df$tokenize_1words
+head(temp_df)
+temp_df %>%
+  filter(!(word %in% stopwords(source = "snowball")))
+head(temp_df)
 ```
 
 #### Stemming
 
-Le stemming permet de rapprocher les mots similaires tel quue 'feel' et 'feels' en un stem qui 
+Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' en un stem qui 
 est un mot de base (ex:'feel').
 
-Pour cela nous allons utiliser une bibliothèque préfaite : SnowballC 
+Nous allons donc utiliser la bibliothèque via le __package SnowBallC :__ 
 
 ```{r}
-# filtered_token_list <- lapply(filtered_token_list, function(element) element$stem)
+temp_df <- df$tokenize_1words
+head(temp_df)
+temp_df %>%
+  mutate(stem = wordStem(word)) %>%
+  count(stem, sort = TRUE)
 
-# head(filtered_token_list)
+head(temp_df)
 ```
 
 #### Lemmatization
-
-
-#### Test 1 :
 
 #### TF-IDF
 
@@ -348,66 +317,13 @@ df_idf(df$tokenize_1words)[0:20,]
 
 Nous avons maintenant besoin d une matrice Document terme afin de pouvoir utilser notre idf et ainsi notre classification bayésienne : 
 
-#### Test 2 : 
 
-```{r}
-spacy_install()
-
-spacy_initialize(entity = FALSE)
-```
-
-
-```{r}
-head(filtered_token_list)
-```
 
 
 #### Pourquoi ce feature engineering ?
 
 ## 4. Entrainement du modèle bayésien
 
-```{r}
-df$final <- filtered_token_list
-df_bayesian <- df[,c('final', 'Emotion')]
-head(df_bayesian)
-
-# # Convertir la colonne "final" en une seule chaîne de texte
-# df_bayesian$text <- sapply(df_bayesian$final, paste, collapse = " ")
-
-# Créer une représentation texte-document sous forme de document-term matrix (dtm)
-dtm <- DocumentTermMatrix(VectorSource(df_bayesian$final))
-head(dtm)
-```
-
-```{r}
-# Assurez-vous que la colonne "Emotion" est de type factor
-df_bayesian$Emotion <- as.factor(df_bayesian$Emotion)
-
-# Division des données en ensemble d'entraînement et ensemble de test
-set.seed(123)
-split_index <- sample(1:nrow(df_bayesian), 0.8 * nrow(df_bayesian))
-train_data <- df_bayesian[split_index, ]
-test_data <- df_bayesian[-split_index, ]
-
-
-# Création d'un modèle Naive Bayes
-nb_model <- naiveBayes(Emotion ~ text, data = train_data)
-
-
-```
-
-```{r}
-# Prédictions sur l'ensemble de test
-predictions <- predict(nb_model, test_data)
-
-# Matrice de confusion
-conf_matrix <- table(predictions, test_data$Emotion)
-print(conf_matrix)
-
-# Calcul de l'exactitude (accuracy)
-accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
-print(paste("Accuracy:", accuracy))
-```
 
 ## 5. Evaluation du modèle
 ### Les résultats
