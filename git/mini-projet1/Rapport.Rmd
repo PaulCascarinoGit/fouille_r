@@ -48,7 +48,12 @@ library(tokenizers)
 library(stopwords)
 
 # Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
-library(SnowballC)
+#library(SnowballC)
+
+#library(spacyr)
+library(tm)
+library(text2vec)
+library(slam)
 ```
 
 __Explication :__
@@ -240,32 +245,58 @@ fréquences d apparition dans notre df.
 
 #### Regardons maintenant les stop words 
 
+Les __stop words__ sont les mots qui n ont pas d intérêts dans le sens de la phrase.
+Ansi les supprimer réduirait le nombre de feature et donc le nombre de calculs.
+Nous pouvons aussi penser que réduire les mots inutiles réduirait la performance de notre futur modèle.
+
+Pour cela nous allons utiliser une liste de stop words déjà faite,
+Nous allons donc utiliser la bibliothèque via le __package SnowBallC :__ 
+```{r}
+head(stopwords::stopwords(source = "snowball"))
+```
+
+Nous allons dans un premier temps travailler avec notre tokenization à 1 mot 
+
 ```{r}
 temp_df <- df$tokenize_1words
-head(temp_df)
-temp_df %>%
-  filter(!(word %in% stopwords(source = "snowball")))
-head(temp_df)
+# Suppose que temp_df est une liste de vecteurs de mots
+df$stop1<- lapply(temp_df, function(x) x[!(x %in% stopwords::stopwords(source = "snowball"))])
+
+cat("Nombre de mots avant l'étape des stop words : ",
+sum(lengths(temp_df)))
+result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
+result$plot
+cat("Nombre de mots après l'étape des stop words : ",
+sum(lengths(df$stop1)))
+result <- give_most_words(df[, c('stop1', 'Emotion')], 'stop1', 10)
+result$plot
 ```
+
 
 #### Stemming
 
 Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' en un stem qui 
 est un mot de base (ex:'feel').
 
-Nous allons donc utiliser la bibliothèque via le __package SnowBallC :__ 
-
 ```{r}
-temp_df <- df$tokenize_1words
-head(temp_df)
-temp_df %>%
-  mutate(stem = wordStem(word)) %>%
-  count(stem, sort = TRUE)
+temp_df <- df$stop1
 
-head(temp_df)
+# Applique la fonction wordStem à chaque vecteur de mots dans la liste
+df$stem1 <- lapply(temp_df, function(x) wordStem(x))
+
+cat("Nombre de mots avant la stematization : ",
+sum(lengths(temp_df)))
+result <- give_most_words(df[, c('stop1', 'Emotion')], 'stop1', 10)
+result$plot
+cat("Nombre de mots après la stematization : ",
+sum(lengths(df$stem1)))
+result <- give_most_words(df[, c('stem1', 'Emotion')], 'stem1', 10)
+result$plot
 ```
 
-#### Lemmatization
+Nous remarquons que __feel__ comporte maintenant par exemple __feel__ et __feeling__.
+Cela fonctionne bien et réduit le nombre de mots différents.
+
 
 #### TF-IDF
 
@@ -279,43 +310,97 @@ avec
 - df(t) : le nombre de documents comportant le terme t
 
 Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
-Cela correspond à l importance du mot dans notre corpus de documents data.frame(..., row.names = NULL, check.rows = FALSE, check.names = TRUE, stringsAsFactors = default.stringsAsFactors())
-
-
-Nous avons ici le nombre d itérations des termes D mais pas le nombre de documents total
-```{r}
-df_idf_unique <- function(df){
-  unique <- lapply(df, unique)
-  token_freq <- table(unlist(unique))
-  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
-  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
-  token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
-  return(token_freq_df)
-}
-
-df_idf_unique(df$tokenize_1words)[0:20,]
-```
-Si nous comparons avec le comptage précédents, nous avons retiré les doublons dans chaque phrase,
-ce qui est nécessaire dans le df-idf
-```{r}
-result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
-head(result$df)
-```
+Cela correspond à l importance du mot dans notre corpus de documents.
 
 ```{r}
-df_idf <- function(df){
-  unique <- df
-  token_freq <- table(unlist(unique))
-  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
-  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
-  token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
-  return(token_freq_df)
-}
+temp_df <- df$stem1[1:100]
 
-df_idf(df$tokenize_1words)[0:20,]
+temp_df_corpus <- Corpus(VectorSource(temp_df))
+
+# Prétraitement du corpus (si nécessaire)
+# Vous pouvez ajouter des étapes de prétraitement supplémentaires en fonction de vos besoins
+
+# Créer un Document-Term Matrix (DTM)
+temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
+
+# Convertir la DTM en matrice creuse (sparse matrix)
+temp_df_sparse <- as.matrix(temp_df_dtm)
+
+# Afficher la matrice creuse
+head(temp_df_sparse)
+
+# TF IDF
+tfidf <- weightTfIdf(temp_df_dtm)
+tfidf
 ```
 
-Nous avons maintenant besoin d une matrice Document terme afin de pouvoir utilser notre idf et ainsi notre classification bayésienne : 
+# # # # # ```{r}
+# # # # # set.seed(123)
+# # # # # split_index <- sample(1:100, 70)  # 70% des données pour l'ensemble d'apprentissage
+# # # # # train_corpus <- temp_df_corpus[split_index]
+# # # # # test_corpus <- temp_df_corpus[-split_index]
+# # # # # train_labels <- factor(df$Emotion[split_index])
+# # # # # test_labels <- factor(df$Emotion[-split_index])
+# # # # # ```
+
+# # # # # ```{r}
+# # # # # # Installer et charger la bibliothèque e1071
+# # # # # # install.packages("e1071")
+# # # # # library(e1071)
+
+# # # # # # Convertir les données en format de document texte
+# # # # # train_data <- DocumentTermMatrix(train_corpus)
+# # # # # test_data <- DocumentTermMatrix(test_corpus)
+
+# # # # # # Entraîner le modèle Naive Bayes
+# # # # # nb_model <- naiveBayes(as.matrix(train_data), train_labels)
+
+# # # # # ```
+
+# # # # # ```{r}
+# # # # # # Prédire les étiquettes pour l'ensemble de test
+# # # # # nb_predictions <- predict(nb_model, as.matrix(test_data))
+
+# # # # # # Évaluer la performance du modèle
+# # # # # confusion_matrix <- table(nb_predictions, test_labels)
+# # # # # print(confusion_matrix)
+# # # # # ```
+
+
+# # # # # # Nous avons ici le nombre d itérations des termes D mais pas le nombre de documents total
+# # # # # # ```{r}
+# # # # # # df_idf_unique <- function(df){
+# # # # # #   unique <- lapply(df, unique)
+# # # # # #   token_freq <- table(unlist(unique))
+# # # # # #   token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+# # # # # #   token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+# # # # # #   token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
+# # # # # #   return(token_freq_df)
+# # # # # # }
+
+# # # # # # df_idf_unique(df$stem1)[0:20,]
+# # # # # # ```
+# # # # # # Si nous comparons avec le comptage précédents, nous avons retiré les doublons dans chaque phrase,
+# # # # # # ce qui est nécessaire dans le df-idf
+# # # # # # ```{r}
+# # # # # # result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
+# # # # # # head(result$df)
+# # # # # # ```
+
+# # # # # # ```{r}
+# # # # # # df_idf <- function(df){
+# # # # # #   unique <- df
+# # # # # #   token_freq <- table(unlist(unique))
+# # # # # #   token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+# # # # # #   token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+# # # # # #   token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
+# # # # # #   return(token_freq_df)
+# # # # # # }
+
+# # # # # # df_idf(df$tokenize_1words)[0:20,]
+# # # # # # ```
+
+# # # # # # Nous avons maintenant besoin d une matrice Document terme afin de pouvoir utilser notre idf et ainsi notre classification bayésienne : 
 
 
 
