@@ -48,12 +48,15 @@ library(tokenizers)
 library(stopwords)
 
 # Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
-#library(SnowballC)
+library(SnowballC)
 
 #library(spacyr)
 library(tm)
 library(text2vec)
 library(slam)
+
+library(quanteda)
+library(quanteda.textmodels)
 ```
 
 __Explication :__
@@ -77,6 +80,7 @@ Les données sont récupérés sur le site kaggle à l'adresse : <https://www.ka
 Nous pouvons ainsi récupérer le csv récupéré avec : 
 ```{r}
 df <- read.csv('data/Emotion_classify_Data.csv')
+#df <- df[0:500,]
 ```
 Voici un aperçu de nos données : 
 ```{r}
@@ -133,23 +137,29 @@ levels(emotion)
 nous avons donc 3 émotions de diposibles qui sont :
 `anger`, `fear`et `joy`.
 
+Créons un graphique qui rend plus visuel la répartition des émotions : 
 ```{r}
-emotion_df <- data.frame(
-  Count = table(emotion)
-)
-colnames(emotion_df) <- c('Emotion', 'Count')
+pie_chart <- function(emotion) {
+  emotion_df <- data.frame(
+    Count = table(emotion)
+  )
+  colnames(emotion_df) <- c('Emotion', 'Count')
 
-emotion_df <- emotion_df %>%
-                mutate(proportion = Count / sum(emotion_df$Count) * 100) %>%
-                mutate(ypos = cumsum(proportion)- 0.5*proportion)
+  emotion_df <- emotion_df %>%
+                  mutate(proportion = Count / sum(emotion_df$Count) * 100) %>%
+                  mutate(ypos = cumsum(proportion)- 0.5*proportion)
 
-pie_chart <- ggplot(emotion_df, aes(x='', y=proportion, fill=Emotion)) +
-              geom_bar(stat='identity', width=1) +
-              coord_polar('y', start=0) +
-              theme(legend.position='none') +
-              geom_text(aes(x ='', y=ypos, label=Emotion), color='white', size = 10)
+  pie_chart <- ggplot(emotion_df, aes(x='', y=proportion, fill=Emotion)) +
+                geom_bar(stat='identity', width=1) +
+                coord_polar('y', start=0) +
+                theme(legend.position='none') +
+                geom_text(aes(x ='', y=ypos, label=Emotion), color='white', size = 10)
 
-pie_chart
+  pie_chart
+}
+
+pie_chart(emotion)
+
 ```
 Nous remarquons que la répartition des 3 émotions est quasiment identiques.
 
@@ -260,15 +270,25 @@ Nous allons dans un premier temps travailler avec notre tokenization à 1 mot
 ```{r}
 temp_df <- df$tokenize_1words
 # Suppose que temp_df est une liste de vecteurs de mots
-df$stop1<- lapply(temp_df, function(x) x[!(x %in% stopwords::stopwords(source = "snowball"))])
+df$t1_snow<- lapply(temp_df, function(x) x[!(x %in% stopwords::stopwords(source = "snowball"))])
+df$t1_smart<- lapply(temp_df, function(x) x[!(x %in% stopwords::stopwords(source = "smart"))])
+df$t1_iso<- lapply(temp_df, function(x) x[!(x %in% stopwords::stopwords(source = "stopwords-iso"))])
 
 cat("Nombre de mots avant l'étape des stop words : ",
 sum(lengths(temp_df)))
 result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
 result$plot
-cat("Nombre de mots après l'étape des stop words : ",
+cat("Nombre de mots après l'étape des stop words pour t1_snow: ",
 sum(lengths(df$stop1)))
-result <- give_most_words(df[, c('stop1', 'Emotion')], 'stop1', 10)
+result <- give_most_words(df[, c('t1_snow', 'Emotion')], 't1_snow', 10)
+result$plot
+cat("Nombre de mots après l'étape des stop words pour t1_smart: ",
+sum(lengths(df$stop1)))
+result <- give_most_words(df[, c('t1_smart', 'Emotion')], 't1_smart', 10)
+result$plot
+cat("Nombre de mots après l'étape des stop words pour t1_iso: ",
+sum(lengths(df$stop1)))
+result <- give_most_words(df[, c('t1_iso', 'Emotion')], 't1_iso', 10)
 result$plot
 ```
 
@@ -279,19 +299,34 @@ Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' e
 est un mot de base (ex:'feel').
 
 ```{r}
-temp_df <- df$stop1
+snow_df <- df$t1_snow
+smart_df <- df$t1_smart
+iso_df <- df$t1_iso
 
 # Applique la fonction wordStem à chaque vecteur de mots dans la liste
-df$stem1 <- lapply(temp_df, function(x) wordStem(x))
+df$t1_snow_stem <- lapply(snow_df, function(x) wordStem(x))
+df$t1_smart_stem <- lapply(smart_df, function(x) wordStem(x))
+df$t1_iso_stem <- lapply(iso_df, function(x) wordStem(x))
 
 cat("Nombre de mots avant la stematization : ",
-sum(lengths(temp_df)))
-result <- give_most_words(df[, c('stop1', 'Emotion')], 'stop1', 10)
+sum(lengths(snow_df)))
+result <- give_most_words(df[, c('t1_snow', 'Emotion')], 't1_snow', 10)
 result$plot
-cat("Nombre de mots après la stematization : ",
-sum(lengths(df$stem1)))
-result <- give_most_words(df[, c('stem1', 'Emotion')], 'stem1', 10)
+cat("Nombre de mots après la stematization pour t1_snow : ",
+sum(lengths(df$t1_snow_stem)))
+result <- give_most_words(df[, c('t1_snow_stem', 'Emotion')], 't1_snow_stem', 10)
 result$plot
+
+cat("Nombre de mots après la stematization pour t1_smart : ",
+sum(lengths(df$t1_smart_stem)))
+result <- give_most_words(df[, c('t1_smart_stem', 'Emotion')], 't1_smart_stem', 10)
+result$plot
+
+cat("Nombre de mots après la stematization pour t1_iso : ",
+sum(lengths(df$t1_iso_stem)))
+result <- give_most_words(df[, c('t1_iso_stem', 'Emotion')], 't1_iso_stem', 10)
+result$plot
+
 ```
 
 Nous remarquons que __feel__ comporte maintenant par exemple __feel__ et __feeling__.
@@ -313,12 +348,9 @@ Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
 Cela correspond à l importance du mot dans notre corpus de documents.
 
 ```{r}
-temp_df <- df$stem1[1:100]
+temp_df <- df$t1_iso_stem
 
 temp_df_corpus <- Corpus(VectorSource(temp_df))
-
-# Prétraitement du corpus (si nécessaire)
-# Vous pouvez ajouter des étapes de prétraitement supplémentaires en fonction de vos besoins
 
 # Créer un Document-Term Matrix (DTM)
 temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
@@ -327,44 +359,158 @@ temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
 temp_df_sparse <- as.matrix(temp_df_dtm)
 
 # Afficher la matrice creuse
-head(temp_df_sparse)
+temp_df_sparse[1,]
 
 # TF IDF
 tfidf <- weightTfIdf(temp_df_dtm)
+#
+
 tfidf
 ```
 
-# # # # # ```{r}
-# # # # # set.seed(123)
-# # # # # split_index <- sample(1:100, 70)  # 70% des données pour l'ensemble d'apprentissage
-# # # # # train_corpus <- temp_df_corpus[split_index]
-# # # # # test_corpus <- temp_df_corpus[-split_index]
-# # # # # train_labels <- factor(df$Emotion[split_index])
-# # # # # test_labels <- factor(df$Emotion[-split_index])
-# # # # # ```
+#### Pourquoi ce feature engineering ?
 
-# # # # # ```{r}
-# # # # # # Installer et charger la bibliothèque e1071
-# # # # # # install.packages("e1071")
-# # # # # library(e1071)
+## 4. Entrainement du modèle bayésien
 
-# # # # # # Convertir les données en format de document texte
-# # # # # train_data <- DocumentTermMatrix(train_corpus)
-# # # # # test_data <- DocumentTermMatrix(test_corpus)
+Définition du test set et train set : 
 
-# # # # # # Entraîner le modèle Naive Bayes
-# # # # # nb_model <- naiveBayes(as.matrix(train_data), train_labels)
+```{r}
+set.seed(14)
 
-# # # # # ```
+# Définir le pourcentage des données d'entraînement sur le total
+percentage_train <- 0.7
 
-# # # # # ```{r}
-# # # # # # Prédire les étiquettes pour l'ensemble de test
-# # # # # nb_predictions <- predict(nb_model, as.matrix(test_data))
+train_indices <- sample(1:nrow(tfidf), floor(percentage_train * nrow(tfidf)))
 
-# # # # # # Évaluer la performance du modèle
-# # # # # confusion_matrix <- table(nb_predictions, test_labels)
-# # # # # print(confusion_matrix)
-# # # # # ```
+
+X_train <- as.matrix(tfidf[train_indices, ])
+X_test <- as.matrix(tfidf[-train_indices, ])
+y_train <- factor(df$Emotion[train_indices])
+y_test <- factor(df$Emotion[-train_indices])
+
+
+cat("Taille de l'ensemble d'entraînement :",
+nrow(X_train), length(y_train))
+
+cat("Taille de l'ensemble de test :",
+nrow(X_test), length(y_test))
+```
+
+```{r}
+# model <- naiveBayes(X_train, y_train)
+
+# predictions <- predict(model, X_test)
+
+# table_confusion <- table(predictions, y_test)
+
+# accuracy <- sum(predictions == y_test) / length(y_test)
+```
+
+
+Création de la fonction qui teste tout le modèle à partir d un preprocessing différent : 
+
+```{r}
+test_bayesian <- function(df_temp, df){
+  temp_df <- df_temp
+  #print(temp_df)
+  temp_df_corpus <- Corpus(VectorSource(temp_df))
+
+  # Créer un Document-Term Matrix (DTM)
+  temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
+
+  # Convertir la DTM en matrice creuse (sparse matrix)
+  temp_df_sparse <- as.matrix(temp_df_dtm)
+  print(temp_df_sparse)
+  #print(temp_df_sparse)
+  # TF IDF
+  tfidf <- weightTfIdf(temp_df_dtm)
+
+  #print(tfidf)
+  set.seed(1)
+
+  # Définir le pourcentage des données d'entraînement sur le total
+  percentage_train <- 0.7
+
+  train_indices <- sample(1:nrow(temp_df_sparse), floor(percentage_train * nrow(temp_df_sparse)))
+
+  X_train <- as.matrix(tfidf[train_indices, ])
+  X_test <- as.matrix(tfidf[-train_indices, ])
+  y_train <- factor(df$Emotion[train_indices])
+  y_test <- factor(df$Emotion[-train_indices])
+
+  model <- naiveBayes(X_train, y_train)
+
+  predictions <- predict(model, X_train)
+  #print(y_train)
+  #table_confusion <- table(predictions, y_train)
+
+  #accuracy <- sum(predictions == y_test) / length(y_test)
+
+  #print(X_test)
+  #print(predictions)
+  #print(table_confusion)
+  # print(accuracy)
+
+}
+```
+
+```{r}
+test_bayesian2 <- function(df_temp, df){
+  temp_df <- df_temp
+  
+  set.seed(1)
+  # Définir le pourcentage des données d'entraînement sur le total
+  percentage_train <- 0.7
+
+  train_indices <- sample(1:length(temp_df), floor(percentage_train * length(temp_df)))
+
+
+  X_train <- as.matrix(temp_df[train_indices])
+  X_test <- as.matrix(temp_df[-train_indices])
+  y_train <- factor(df$Emotion[train_indices])
+  y_test <- factor(df$Emotion[-train_indices])
+
+  # Créer un itoken
+  itoken_train <- itoken(X_train)
+  itoken_test <- itoken(X_test)
+  
+  # Créer le vocabulaire
+  vocabulary <- create_vocabulary(itoken_train)
+  vocabulary <- prune_vocabulary(vocabulary, term_count_min = 5, doc_proportion_max = 0.5)
+
+  vectorizer <- vocab_vectorizer(vocabulary)
+
+  dtm_train <- create_dtm(itoken_train, vectorizer)
+  dtm_test <- create_dtm(itoken_test, vectorizer)
+
+  train_matrix <- as.matrix(as(dtm_train, "CsparseMatrix"))
+  test_matrix <- as.matrix(as(dtm_test, "CsparseMatrix"))
+
+  model <- naiveBayes(train_matrix, y_train)
+
+  predictions <- predict(model, test_matrix)
+
+  accuracy <- sum(predictions == y_test) / length(y_test)
+  confusion <- confusionMatrix(predictions, y_test)
+  print(accuracy)
+  print(confusion)
+}
+```
+
+```{r}
+# test_bayesian(df$tokenize_1words[1:500], df[1:500,])
+# test_bayesian(df$tokenize_2words[1:500], df[1:500,])
+# test_bayesian(df$tokenize_3words[1:500], df[1:500,])
+# test_bayesian(df$t1_snow[1:500], df[1:500,])
+# test_bayesian(df$t1_smart[1:500], df[1:500,])
+# test_bayesian(df$t1_iso[1:500], df[1:500,])
+# test_bayesian(df$t1_snow_stem[1:500], df[1:500,])
+# test_bayesian(df$t1_smart_stem[1:500], df[1:500,])
+test_bayesian2(df$t1_smart_stem, df)
+
+```
+
+
 
 
 # # # # # # Nous avons ici le nombre d itérations des termes D mais pas le nombre de documents total
@@ -423,3 +569,8 @@ tfidf
 ## 7. Conclusion et travaux à venir
 ### Conclusion
 ### Améliorations possibles
+
+
+#### Pourquoi ce feature engineering ?
+
+## 4. Entrainement du modèle bayésien
