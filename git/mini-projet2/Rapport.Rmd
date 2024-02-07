@@ -34,6 +34,7 @@ Et faisons les chargements des packages nécessaires :
 
 ```{r}
 library(dplyr)
+library(ggplot2)
 
 ```
 __Explication :__
@@ -88,3 +89,46 @@ Nous requons aussi qu'il n'y a pas d'éléments nuls
 sum(is.na(df_train))
 sum(is.na(df_test))
 ```
+
+#### Regardons la colonne 'entity'
+
+```{r}
+df_train$entity[23332:23334]
+```
+Nous avons donc les sujets des tweets en anglais. 
+Ils se répètent souvent, regardons la distribution : 
+
+```{r}
+entity_dist <- factor(df_train$entity)
+levels(entity_dist)
+length((levels(entity_dist)))
+```
+Nous avons donc une liste de 32 entités, regardons la répartition
+dans le dataframe d'entrainement.
+
+Créons un graphique qui rend plus visuel la répartition des émotions : 
+```{r}
+pie_chart <- function(entity) {
+  train_df <- data.frame(
+    Count = table(entity)
+  )
+  colnames(train_df) <- c('Entity', 'Count')
+
+  train_df <- train_df %>%
+                  mutate(proportion = Count / sum(train_df$Count) * 100) %>%
+                  mutate(ypos = cumsum(proportion)- 0.5*proportion)
+
+  pie_chart <- ggplot(train_df, aes(x='', y=proportion, fill=Entity)) +
+                geom_bar(stat='identity', width=1) +
+                coord_polar('y', start=0) +
+                theme(legend.position='none') +
+                geom_text(aes(x ='', y=ypos, label=Entity), color='white', size = 10)
+
+  pie_chart
+}
+
+pie_chart(entity_dist)
+
+```
+Nous remarquons que la proportion est assez similire entre les entités,
+Il n'y en a pas qui prennent vraiment le dessus.
