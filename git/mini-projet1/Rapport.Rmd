@@ -358,9 +358,6 @@ temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
 # Convertir la DTM en matrice creuse (sparse matrix)
 temp_df_sparse <- as.matrix(temp_df_dtm)
 
-# Afficher la matrice creuse
-temp_df_sparse[1,]
-
 # TF IDF
 tfidf <- weightTfIdf(temp_df_dtm)
 #
@@ -455,12 +452,12 @@ test_bayesian <- function(df_temp, df){
 ```
 
 ```{r}
-test_bayesian2 <- function(df_temp, df){
+test_bayesian2 <- function(df_temp, df, term_count_min, seed){
   temp_df <- df_temp
   
-  set.seed(1)
+  set.seed(seed)
   # Définir le pourcentage des données d'entraînement sur le total
-  percentage_train <- 0.7
+  percentage_train <- 0.70
 
   train_indices <- sample(1:length(temp_df), floor(percentage_train * length(temp_df)))
 
@@ -476,7 +473,7 @@ test_bayesian2 <- function(df_temp, df){
   
   # Créer le vocabulaire
   vocabulary <- create_vocabulary(itoken_train)
-  vocabulary <- prune_vocabulary(vocabulary, term_count_min = 5, doc_proportion_max = 0.5)
+  vocabulary <- prune_vocabulary(vocabulary, term_count_min)
 
   vectorizer <- vocab_vectorizer(vocabulary)
 
@@ -492,63 +489,37 @@ test_bayesian2 <- function(df_temp, df){
 
   accuracy <- sum(predictions == y_test) / length(y_test)
   confusion <- confusionMatrix(predictions, y_test)
-  print(accuracy)
-  print(confusion)
+  return(accuracy)
+  #print(confusion)
 }
 ```
 
 ```{r}
-# test_bayesian(df$tokenize_1words[1:500], df[1:500,])
-# test_bayesian(df$tokenize_2words[1:500], df[1:500,])
-# test_bayesian(df$tokenize_3words[1:500], df[1:500,])
-# test_bayesian(df$t1_snow[1:500], df[1:500,])
-# test_bayesian(df$t1_smart[1:500], df[1:500,])
-# test_bayesian(df$t1_iso[1:500], df[1:500,])
-# test_bayesian(df$t1_snow_stem[1:500], df[1:500,])
-# test_bayesian(df$t1_smart_stem[1:500], df[1:500,])
-test_bayesian2(df$t1_smart_stem, df)
+# test_bayesian2(df$tokenize_1words[1:500], df[1:500,])
+# test_bayesian2(df$tokenize_2words[1:500], df[1:500,])
+# test_bayesian2(df$tokenize_3words[1:500], df[1:500,])
+# test_bayesian2(df$t1_snow[1:500], df[1:500,])
+# test_bayesian2(df$t1_smart[1:500], df[1:500,])
+# test_bayesian2(df$t1_iso[1:500], df[1:500,])
+# test_bayesian2(df$t1_snow_stem[1:500], df[1:500,])
+# test_bayesian2(df$t1_smart_stem[1:500], df[1:500,])
+
+
+seq_seed <- seq(1, 100, by = 10)
+seq_min <- seq(5, 25, by = 5)
+accuracy_values <- c()
+for (j in seq_min){
+  print(j)
+  for(i in seq_seed){
+    accuracy <- test_bayesian2(df$t1_smart_stem, df, j, i)
+    #
+    print(accuracy)
+    accuracy_values <- c(accuracy_values, accuracy)
+  } 
+  print(mean(accuracy)) 
+}
 
 ```
-
-
-
-
-# # # # # # Nous avons ici le nombre d itérations des termes D mais pas le nombre de documents total
-# # # # # # ```{r}
-# # # # # # df_idf_unique <- function(df){
-# # # # # #   unique <- lapply(df, unique)
-# # # # # #   token_freq <- table(unlist(unique))
-# # # # # #   token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
-# # # # # #   token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
-# # # # # #   token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
-# # # # # #   return(token_freq_df)
-# # # # # # }
-
-# # # # # # df_idf_unique(df$stem1)[0:20,]
-# # # # # # ```
-# # # # # # Si nous comparons avec le comptage précédents, nous avons retiré les doublons dans chaque phrase,
-# # # # # # ce qui est nécessaire dans le df-idf
-# # # # # # ```{r}
-# # # # # # result <- give_most_words(df[, c('tokenize_1words', 'Emotion')], 'tokenize_1words', 10)
-# # # # # # head(result$df)
-# # # # # # ```
-
-# # # # # # ```{r}
-# # # # # # df_idf <- function(df){
-# # # # # #   unique <- df
-# # # # # #   token_freq <- table(unlist(unique))
-# # # # # #   token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
-# # # # # #   token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
-# # # # # #   token_freq_df$idf <- log(length(df)/token_freq_df$frequency)
-# # # # # #   return(token_freq_df)
-# # # # # # }
-
-# # # # # # df_idf(df$tokenize_1words)[0:20,]
-# # # # # # ```
-
-# # # # # # Nous avons maintenant besoin d une matrice Document terme afin de pouvoir utilser notre idf et ainsi notre classification bayésienne : 
-
-
 
 
 #### Pourquoi ce feature engineering ?
