@@ -34,7 +34,7 @@ rm(list=ls())
 
 Et faisons les chargements des packages nécessaires : 
 ```{r}
-library(kableExtra)
+#library(kableExtra)
 library(e1071)
 library(caret)
 library(ggplot2)
@@ -105,7 +105,7 @@ Nous remarquons qu'il n'y a pas d'éléments dupliqués :
 sum(duplicated(df))
 ```
 
-Nous requons aussi qu'il n'y a pas d'éléments nuls
+Nous remarquons aussi qu'il n'y a pas d'éléments nuls
 ```{r}
 sum(is.na(df))
 ```

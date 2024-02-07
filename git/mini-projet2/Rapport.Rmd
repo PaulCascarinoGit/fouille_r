@@ -1,0 +1,90 @@
+---
+title: "Analyse factorielle discriminante"
+output:
+  html_document:
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+author: "Paul Cascarino et Mathis Quinio-Cosquer"
+date: "Décembre 2023"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Projet 2 : 
+
+## 1. Introduction
+
+### Les objectifs du projet
+Le but de ce projet est de réduire la dimensionnalité des données de 
+tweet afin de visualiser le regroupement de sentiments.
+
+
+## 2. Chargement et exploration des données
+
+### Préparation et imports
+Dans un premier temps, nous effaçons la mémoire : 
+```{r}
+rm(list=ls())
+```
+
+Et faisons les chargements des packages nécessaires : 
+
+```{r}
+library(dplyr)
+
+```
+__Explication :__
+
+1. `library(dplyr)` charge le package `dplyr` qui offre des fonctions
+  utiles et simples dans la manipulation de données
+
+### Chargement des données
+
+Les données sont récupérés sur le site kaggle à l'adresse : <https://www.kaggle.com/datasets/jp797498e/twitter-entity-sentiment-analysis>
+Nous pouvons ainsi récupérer le csv récupéré avec : 
+
+```{r}
+df_train <- read.csv('data/twitter_training.csv', header=FALSE)
+df_test <- read.csv('data/twitter_validation.csv', header=FALSE)
+
+head(df_train)
+```
+__Explication :__ Les premières lignes sont des données et non le nom des colonnes
+D'où le __header=FALSE__
+
+
+### Analyse exploratoire des données
+
+```{r}
+dim(df_train)
+dim(df_test)
+```
+
+Nous avons donc deux dataframe : 
+- un de training de 74681 lignes et 4 colonnes
+- un de test de 999 lignes et 4 colonnes
+
+
+Ajoutons des noms aux colonnes dans nos df pour plus de simplicité: 
+```{r}
+names <- c('tweet_id', 'entity', 'sentiment', 'content')
+colnames(df_train) <- names
+colnames(df_test) <- names
+
+colnames(df_train)
+```
+
+Nous remarquons que nous avons 2700 éléments dupliqués dans notre train_df : 
+```{r}
+sum(duplicated(df_train))
+sum(duplicated(df_test))
+```
+
+Nous requons aussi qu'il n'y a pas d'éléments nuls
+```{r}
+sum(is.na(df_train))
+sum(is.na(df_test))
+```
