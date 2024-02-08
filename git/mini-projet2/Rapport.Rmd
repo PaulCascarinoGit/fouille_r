@@ -106,29 +106,56 @@ length((levels(entity_dist)))
 Nous avons donc une liste de 32 entités, regardons la répartition
 dans le dataframe d'entrainement.
 
-Créons un graphique qui rend plus visuel la répartition des émotions : 
 ```{r}
-pie_chart <- function(entity) {
+min(table(df_train$entity))
+max(table(df_train$entity))
+
+```
+
+
+```
+Nous remarquons que la proportion est assez similaire car elle varie uniquement
+de 2244 à 2400 tweets par entités.
+
+#### Regardons la colonne sentiments :
+
+
+```{r}
+sentiment_dist <- factor(df_train$sentiment)
+levels(sentiment_dist)
+length((levels(sentiment_dist)))
+```
+Nous avons donc une liste de 4 sentiments : 
+"Irrelevant" "Negative"   "Neutral"    "Positive"  
+
+Regardons la répartition des sentiments à l'aide d'un pie chart créé lors du mini projet 1 : 
+```{r}
+pie_chart <- function(sentiment) {
   train_df <- data.frame(
-    Count = table(entity)
+    Count = table(sentiment)
   )
-  colnames(train_df) <- c('Entity', 'Count')
+  colnames(train_df) <- c('sentiment', 'Count')
 
   train_df <- train_df %>%
                   mutate(proportion = Count / sum(train_df$Count) * 100) %>%
                   mutate(ypos = cumsum(proportion)- 0.5*proportion)
 
-  pie_chart <- ggplot(train_df, aes(x='', y=proportion, fill=Entity)) +
+  pie_chart <- ggplot(train_df, aes(x='', y=proportion, fill=sentiment)) +
                 geom_bar(stat='identity', width=1) +
                 coord_polar('y', start=0) +
                 theme(legend.position='none') +
-                geom_text(aes(x ='', y=ypos, label=Entity), color='white', size = 10)
+                geom_text(aes(x ='', y=ypos, label=paste(sentiment, sprintf("%.1f%%", proportion))), color='white', size = 10)
 
   pie_chart
 }
 
-pie_chart(entity_dist)
+pie_chart(sentiment_dist)
 
 ```
-Nous remarquons que la proportion est assez similire entre les entités,
-Il n'y en a pas qui prennent vraiment le dessus.
+Nous remarquons que nous avons une répartition inégale de tweet en fonction des sentiments.
+Cela sera peut être à prendre en compte pour améliorer notre modèle en fonction des poids de chacuns.
+
+#### Regardons la colonne content :
+```{r}
+colnames(df_train)
+```
