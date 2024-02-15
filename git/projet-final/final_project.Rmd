@@ -1,0 +1,500 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2023 -2024 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+Projet final : Classification bayésienne et Analyse Factorielle Discriminante 
+:::
+
+</FONT></FONT>
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 1. Chargement et exploration des données
+:::
+
+</FONT></FONT>
+
+# Installation des librairies
+
+
+```{r}
+install.packages("tm")
+install.packages("dplyr")
+install.packages("Matrix")
+install.packages("bert")
+install.packages("quanteda.textstats")
+install.packages("MASS")
+install.packages("caret")
+install.packages("skimr")
+install.packages("e1071")
+install.packages("naivebayes")
+install.packages("pROC")
+install.packages("xgboost")
+```
+
+# Chargement des librairies
+```{r}
+library(tm)
+library(dplyr)
+library(Matrix)
+library(bert)
+library(quanteda.textstats)#traitement de texte (lisibilité)
+library(MASS)
+library(caret)
+library(skimr)
+library(e1071)
+library(naivebayes)
+library(pROC)
+library(xgboost)
+```
+
+# Chargement des données
+```{r}
+# Charger les données
+train_essays <- read.csv("train_essays.csv")
+train_prompts <- read.csv("train_prompts.csv")
+```
+
+
+# Les premières lignes des données :
+
+```{r}
+# Premières lignes de train_essays
+head(train_essays)
+```
+```{r}
+#Premières lignes de train_prompts
+head(train_prompts)
+```
+
+
+```{r}
+# Fusion des 2 fichiers .csv et prétraitement des données
+data <- merge(train_prompts, train_essays, by = 'prompt_id', all = TRUE)
+data <- na.omit(data)
+head(data)
+```
+
+```{r}
+#Résumé statistique des données :
+summary(data$generated)
+```
+
+```{r}
+#Distribution des classes :
+#table(data$id)
+#table(data$prompt_id)
+#table(data$text)
+table(data$generated)
+```
+
+```{r}
+# Textes générés (=1)
+generated_texts <- data[data$generated == 1, ]
+
+print(head(generated_texts$text))
+```
+
+```{r}
+
+# tableau de fréquences pour generated
+
+freq_table <- table(train_essays$generated)
+print(freq_table)
+
+# Graphique à barre
+barplot(freq_table, main = "Distribution de 'generated'", xlab = "generated", ylab = "Fréquence")
+```
+
+```{r}
+#résumé stats des données
+data %>%
+  skim()
+
+sum(data$generated)
+```
+
+# Prétraitement du texte
+```{r}
+#corpus textuel en le convertissant en minuscules, supprimant ponctuation,
+#supprimant les chiffres, les mots vides et les espaces vides
+corpus <- Corpus(VectorSource(data$text))
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+print(corpus)
+```
+
+# Analyse exploratoire du texte
+
+```{r}
+
+# Créer la DTM
+dtm <- DocumentTermMatrix(corpus)
+
+# Examinons quelques-uns des éléments de la DTM
+inspect(dtm[1:5, 1:10]) 
+```
+
+
+```{r}
+# Longueur des textes
+text_lengths <- sapply(corpus, function(x) length(unlist(strsplit(as.character(x), " "))))
+hist(text_lengths, main="Histogramme de la longueur des textes", xlab="Nombre de mots", col="skyblue", border="black")
+```
+
+```{r}
+# Distribution de la classe en fonction de la longueur des textes
+data$text_lengths <- text_lengths
+cat("\nDistribution de la classe en fonction de la longueur des textes :\n")
+summary(data %>% group_by(generated) %>% summarise(avg_length = mean(text_lengths)))
+```
+
+
+
+::: {align="center"}
+ 2. Extraction de caractéristiques (Feature Extraction)
+:::
+
+
+```{r}
+# Distribution de n-grammes
+ngram_dist <- rowSums(as.matrix(dtm))
+```
+
+```{r}
+# Variabilité de la longueur des phrases
+text_lengths <- sapply(corpus, function(x) length(unlist(strsplit(as.character(x), " "))))
+sentence_variability <- apply(matrix(text_lengths, ncol = 1), 1, sd)
+```
+
+```{r}
+# Scores de lisibilité avec quanteda
+readability_scores <- textstat_readability(data$text)
+```
+
+```{r}
+# tableau avec les caractéristiques
+features <- data.frame(
+  ngram_dist,
+  sentence_variability,
+  readability_scores
+)
+
+head(features)
+```
+
+```{r}
+# Convertion en facteur
+#data$instructions <- as.factor(data$instructions)
+#data$source_text <- as.factor(data$source_text)
+#data$id <- as.factor(data$id)
+#data$text <- as.factor(data$text)
+```
+
+```{r}
+# Conversions en int
+#data$instructions <- as.integer(data$instructions)
+#data$source_text <- as.integer(data$source_text)
+#data$id <- as.integer(data$id)
+#data$text <- as.integer(data$text)
+```
+# TF-IDF
+
+```{r}
+# Calculer TF-IDF
+tfidf <- weightTfIdf(dtm)
+
+# Affiche les termes
+terms <- colnames(tfidf)
+
+# Sélection de quelques documents pour inspection
+sample_docs <- sample(1:ncol(tfidf), 5)
+sample_tfidf <- tfidf[, sample_docs]
+
+# Affiche les premières lignes du tableau de caractéristiques
+print(as.data.frame(as.matrix(sample_tfidf)))
+```
+
+
+::: {align="center"}
+ 3. Analyse factorielle discriminante (Réduction de la dimensionnalité)
+:::
+
+```{r}
+# Séparation des données en ensemble d'entraînement et de test
+set.seed(123)
+train_indices <- sample(1:nrow(data), 0.8 * nrow(data))
+train_data <- data[train_indices, ]
+test_data <- data[-train_indices, ]
+```
+
+```{r}
+print(colnames(train_data))
+```
+
+```{r}
+# Convertir la colonne "generated" en facteur
+train_data$generated <- as.factor(train_data$generated)
+```
+
+
+```{r}
+str(test_data)
+```
+
+```{r}
+# Fusionne les ensembles d'entraînement et de test
+merged_data <- rbind(train_data, test_data)
+```
+
+```{r}
+# Converti la colonne "id" en facteur
+merged_data$id <- as.factor(merged_data$id)
+```
+
+```{r}
+str(test_data)
+```
+
+```{r}
+# Application de l'analyse discriminante
+lda_model <- lda(generated ~ ., data = merged_data)
+```
+
+
+```{r}
+# Appliquer le modèle aux ensembles d'entraînement et de test
+lda_train <- predict(lda_model, merged_data[train_indices, ])$x
+head(lda_train)
+```
+
+```{r}
+lda_test <- predict(lda_model, merged_data[-train_indices, ])$x
+head(lda_test)
+```
+
+
+::: {align="center"}
+ 4. Entraînement du modèle bayésien
+:::
+
+########## Avec e1071 si lda_train et lda_test fonctionnent
+
+```{r}
+# Utilisez les caractéristiques réduites de l'AFD pour l'entraînement et les tests
+X_train <- as.matrix(lda_train)
+y_train <- as.factor(train_data$generated)
+head(X_train)
+head(y_train)
+```
+
+```{r}
+# Entrainement d'un modèle Naive Bayes
+nb_model <- naiveBayes(X_train, y_train)
+```
+
+```{r}
+# Explorez le modèle entraîné
+summary(nb_model)
+```
+
+```{r}
+# Appliquons le modèle aux données de test
+X_test <- as.matrix(lda_test)
+y_pred <- predict(nb_model, X_test)
+```
+
+```{r}
+# Evaluation des performances du modèle
+conf_matrix <- table(y_pred, test_data$generated)
+conf_matrix
+```
+
+
+
+################# Avec naivebayes
+```{r}
+# Data frame avec les caractéristiques réduites
+train_features <- data.frame(LD1 = lda_train[, "LD1"], generated = train_data$generated)
+# Colonne "generated" en facteur dans train_features
+train_features$generated <- as.factor(train_features$generated)
+```
+
+```{r}
+# Entrainement du modèle bayésien
+nb_model <- naive_bayes(generated ~ LD1, data = train_features)
+```
+
+```{r}
+# détails du modèle
+print(nb_model)
+```
+
+
+
+```{r}
+# Prédictions sur l'ensemble de test
+test_features <- data.frame(LD1 = lda_test[, "LD1"], generated = test_data$generated)
+test_features$generated <- as.factor(test_features$generated)  # Assurez-vous que la colonne "generated" est un facteur
+predictions <- predict(nb_model, newdata = test_features)
+```
+
+```{r}
+# matrice de confusion
+conf_matrix <- confusionMatrix(predictions$class, test_features$generated)
+print(conf_matrix)
+```
+
+
+
+::: {align="center"}
+ 5. Évaluation du modèle
+:::
+
+```{r}
+predictions <- predict(nb_model, newdata = test_features, type = "class")
+```
+
+
+```{r}
+probas <- predict(nb_model, newdata = test_features, type = "prob")
+```
+
+```{r}
+test_data$generated <- factor(test_data$generated, levels = levels(predictions))
+```
+
+```{r}
+# matrice de confusion
+conf_matrix <- confusionMatrix(predictions, test_data$generated)
+```
+
+
+```{r}
+# Affichage de la matrice de confusion
+print(conf_matrix)
+```
+
+
+```{r}
+# Calcul de l'exactitude
+accuracy <- conf_matrix$overall["Accuracy"]
+cat("Exactitude :", accuracy, "\n")
+```
+
+```{r}
+# Calcul de la précision
+precision <- conf_matrix$byClass["Precision"]
+cat("Précision :", precision, "\n")
+```
+
+```{r}
+# Calcul du rappel
+recall <- conf_matrix$byClass["Recall"]
+cat("Rappel :", recall, "\n")
+```
+
+```{r}
+# Calcul du score F1
+f1_score <- conf_matrix$byClass["F1"]
+cat("Score F1 :", f1_score, "\n")
+```
+
+```{r}
+# Calcul de la courbe ROC
+roc_auc <- pROC::roc(response = as.numeric(test_data$generated == "1"), predictor = probas[, "1"])$auc
+
+cat("ROC AUC :", roc_auc, "\n")
+```
+
+#############################################################
+# Validation Croisée avec XGBoost
+```{r}
+# Définir les paramètres du modèle
+params <- list(
+  booster = 'gbtree',
+  objective = 'binary:logistic',
+  eta = 0.3,
+  max_depth = 3,
+  eval_metric = 'auc',
+  min_child_weight = 1,
+  subsample = 1,
+  colsample_bytree = 1
+)
+```
+
+```{r}
+# Conversion des étiquettes en valeurs numériques
+y_train_numeric <- as.numeric(as.character(y_train))
+
+# Conversion des données en DMatrix
+xgb_data <- xgb.DMatrix(data = X_train, label = y_train_numeric)
+```
+
+```{r}
+# validation croisée stratifiée avec XGBoost
+set.seed(42)  # pour la reproductibilité
+cv_results <- xgb.cv(
+  params = params,
+  data = xgb_data,
+  nrounds = 100,
+  nfold = 2,  # nombre de plis
+  stratified = TRUE,
+  early_stopping_rounds = 10,
+  maximize = TRUE,
+  verbose = TRUE
+)
+```
+
+```{r}
+# résultats de la validation croisée
+print(cv_results)
+```
+
+```{r}
+confusionMatrix(prediction, y_train)
+```
+
+```{r}
+prediction <- factor(prediction, levels = levels(y_train))
+
+# confusionMatrix
+conf_matrix <- confusionMatrix(prediction, y_train)
+print(conf_matrix)
+```
+
+```{r}
+
+```
