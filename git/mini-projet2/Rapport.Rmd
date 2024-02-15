@@ -35,6 +35,7 @@ Et faisons les chargements des packages nécessaires :
 ```{r}
 library(dplyr)
 library(ggplot2)
+library(stringr)
 
 ```
 __Explication :__
@@ -90,7 +91,7 @@ sum(is.na(df_train))
 sum(is.na(df_test))
 ```
 
-#### Regardons la colonne 'entity'
+#### La colonne 'entity'
 
 ```{r}
 df_train$entity[23332:23334]
@@ -117,7 +118,7 @@ max(table(df_train$entity))
 Nous remarquons que la proportion est assez similaire car elle varie uniquement
 de 2244 à 2400 tweets par entités.
 
-#### Regardons la colonne sentiments :
+#### La colonne sentiments :
 
 
 ```{r}
@@ -155,7 +156,45 @@ pie_chart(sentiment_dist)
 Nous remarquons que nous avons une répartition inégale de tweet en fonction des sentiments.
 Cela sera peut être à prendre en compte pour améliorer notre modèle en fonction des poids de chacuns.
 
-#### Regardons la colonne content :
+#### La colonne content : 
+
+Regardons la répartition des longueurs des chaines de caractères en fonction des sentiments :
+(Graph crée avec le mini-projet 1)
 ```{r}
-colnames(df_train)
+nchar_df <- data.frame(length = nchar(df_train$content), sentiment = df_train$sentiment)
+
+plot <- ggplot(nchar_df, aes(x=length, fill=sentiment)) +
+          geom_histogram(position='identity') + 
+          facet_wrap(~sentiment, scales='free')
+
+plot
 ```
+Nous remarquons une répartition assez similaire entre les 4 valeurs de sentiments, 
+la longueur des chaînes de caractères ne permettrait donc pas d'avoir des informations utiles facilement.
+
+### 3. Ingénierie des caractéristiques : 
+
+#### Traitement de la colonne content
+
+Pour cela nous allons créer une fonction qui vas : 
+- mettre tous les textes en minuscule
+- supprimer les chiffres
+- supprimer tous les caractères spéciaux
+
+```{r}
+
+clean_text <- function(df_col){
+  temp_col <- str_to_lower(df_col)
+
+  # nbr_comment_false_char <- sum( ! str_detect(df$Comment, '[[:alnum:]]') == TRUE)
+  # nbr_comment_num <- sum(str_detect(df$Comment, '^[0-9]') == TRUE)
+  # nbr_comment_with_punct <- sum(str_detect(df$Comment, '[[:punct:]]') == TRUE)
+  return(temp_col)
+}
+
+df_train$content <- clean_text(df_train$content)
+df_test$content <- clean_text(df_test$content)
+
+head(df_train$content)  
+```
+

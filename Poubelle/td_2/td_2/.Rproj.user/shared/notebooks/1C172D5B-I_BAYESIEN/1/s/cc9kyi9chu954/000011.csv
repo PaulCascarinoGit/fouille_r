@@ -1,4 +1,0 @@
-"0",""
-"0","trainX <- subset(df, select = c('Salaire',	'Impots',	'Etudiant'))"
-"0",""
-"0","trainX"

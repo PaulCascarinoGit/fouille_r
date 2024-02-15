@@ -1,7 +1,0 @@
-"0","# On efface les variables en mémoires"
-"0","rm(list=ls())"
-"0",""
-"0","# Importation des librairies"
-"0","library(tidyverse)"
-"0","library(kableExtra)"
-"0",""
