@@ -1,0 +1,280 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2023 -2024 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+Projet 2 : Analyse factorielle discriminante
+:::
+
+</FONT></FONT>
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 1. Chargement et pré-traitement des données
+:::
+
+</FONT></FONT>
+
+# Installation des librairies
+
+
+```{r}
+install.packages("spacyr")
+install.packages("Matrix")
+install.packages("text2vec")
+install.packages("naivebayes")
+install.packages("caret")
+install.packages("tm")
+install.packages("naivebayes")
+install.packages("randomForest")
+```
+
+# Chargement des librairies
+```{r}
+library(spacyr)
+library(Matrix)
+library(text2vec)
+library(naivebayes)
+```
+
+```{r}
+library(caret)
+library(tm)
+#library(e10/1)
+library(randomForest)
+```
+
+# Chargement des données
+```{r}
+# Charger les données
+
+df <- read.csv("twitter_training.csv", header = FALSE)
+colnames(df) <- c("id", "country", "Label", "Text")
+
+cat("Number of rows:", nrow(df), "\nNumber of columns:", ncol(df), "\n")
+```
+
+```{r}
+head(df, 5)
+```
+```{r}
+str(df)
+```
+
+```{r}
+table(df$Label) #vior le nombre de tweet negatif/positif/etc
+```
+
+```{r}
+for(i in 1:5){
+  cat(sprintf("%d: %s -> %s\n", i, df$Text[i], df$Label[i]))
+}
+```
+
+# Nettoyage des données
+```{r}
+df <- na.omit(df)
+
+```
+
+# fonction de préprocessing
+```{r}
+spacy_install()
+spacy_initialize(model = "en_core_web_sm")
+```
+
+```{r}
+preprocess <- function(text){
+  doc <- spacy_parse(text, lemma = TRUE, entity = FALSE)
+
+  stop_words <- stopwords("en")
+
+  filtered_tokens <- doc[!doc$token %in% stop_words & doc$pos != "PUNCT",]
+
+  paste(filtered_tokens$lema, collapse = 	" ")
+}
+
+```
+
+```{r}
+df$Preprocessed_Text <- sapply(df$Text, preprocess, USE.NAMES = FALSE)
+
+head(df)
+```
+
+```{r}
+write.csv(df, "preprocessed_tweets.csv", row.names=FALSE)
+```
+
+######################################################################
+# Avec le second fichier preprocessed des données de training
+
+
+```{r}
+df <- read.csv("preprocessed_tweets.csv")
+
+cat("Nb of rows:", nrow(df), "\nNumber of columns:", ncol(df), "\n")
+
+head(df, 5)
+```
+
+```{r}
+df$Label <- as.factor(df$Label)
+df$Label_encoded <- as.integer(df$Label) - 1
+head(df, 5)
+```
+```{r}
+table(df$Label)
+```
+
+#######################################################
+# TRAIN OUR MODEL
+
+# Option 1 : utiliser notre dataset df avec le code suivant : 
+
+```{r}
+set.seed(42)
+trainIndex <- createDataPartition(df$Label, p = 0.8, list = FALSE, times = 1)
+X_train <- df$Preprocessed_Text[trainIndex]
+X_test <- df$Preprocessed_Text[-trainIndex]
+y_train <- df$Label[trainIndex]
+y_test <- df$Label[-trainIndex]
+
+cat("Shape of X_train: ", length(y_train), "\n")
+cat("Shape of X_test: ", length(y_test), "\n")
+```
+
+# Option 2 : utiliser un sous ensemble de données avec le code suivant : 
+
+```{r}
+subset_indices_train <- 1:30000
+subset_indices_test <- 1:10000
+
+X_train_subset <- X_train[subset_indices_train]
+y_train_subset <- y_train[subset_indices_train]
+
+X_test_subset <- X_test[subset_indices_test]
+y_test_subset <- y_test[subset_indices_test]
+
+cat("Shape of X_train: ", length(y_train), "\n")
+cat("Shape of X_train reduced: ", length(y_train_subset), "\n")
+cat("Shape of X_test: ", length(y_test), "\n")
+cat("Shape of X_test reduced: ", length(y_test_subset), "\n")
+```
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 2. Ingénierie des caractéristiques (feature engineering):
+:::
+
+</FONT></FONT>
+
+# TF-IDF
+```{r}
+X_train_subset <- ifelse(nchar(X_train_subset) == 0, " ", X_train_subset)
+X_test_subset <- ifelse(nchar(X_test_subset) == 0, " ", X_test_subset)
+```
+
+```{r}
+X_train_subset <- as.character(X_train_subset)
+X_test_subset <- as.character(X_test_subset)
+
+itoken_train <- itoken(X_train_subset, tokenizer = word_tokenizer, progressbar = FALSE)
+itoken_test <- itoken(X_test_subset, tokenizer = word_tokenizer, progressbar = FALSE)
+
+```
+
+```{r}
+install.packages("text2vec")
+```
+
+```{r}
+library(text2vec)
+```
+
+```{r}
+vocabulary <- create_vocabulary(itoken_train)
+vocabulary <- prune_vocabulary(vocabulary, term_count_min = 5, doc_proportion_max = 0.5)
+```
+
+```{r}
+vectorizer <- vocab_vectorizer(vocabulary)
+```
+
+```{r}
+dtm_train <- create_dtm(itoken_train, vectorizer)
+dtm_test <- create_dtm(itoken_test, vectorizer)
+```
+
+```{r}
+train_matrix <- as(dtm_train, "CsparseMatrix")
+test_matrix <- as(dtm_test, "CsparseMatrix")
+
+```
+
+# Dimensions:
+
+```{r}
+cat("Dimensions of train_matrix:", dim(train_matrix)[1], "rows and", dim(train_matrix)[2], "columns\n")
+cat("Length of y_train_matrix:", length(y_train_matrix), "\n")
+```
+
+# Train Naive Bayes Model using dense matrix
+
+```{r}
+install.packages(e1071)
+library(e1071)
+```
+
+```{r}
+train_matrix_dense <- as.matrix(train_matrix)
+test_matrix_dense <- as.matrix(test_matrix)
+
+y_train_subset <- as.factor(y_train_subset)
+y_test_subset <- as.factor(y_test_subset)
+
+nb_model <- naiveBayes(train_matrix_dense, y_train_subset)
+
+test_pred <- predict(nb_model, test_matrix_dense)
+
+accuracy <- sum(test_pred == y_test_subset) / length(y_test_subset)
+cat("Model accuracy:", accuracy, "\n")
+
+confusion <- confusionMatrix(test_pred, y_test_subset)
+cat("Model accuracy:", accuracy, "\n")
+
+confusion <- confusionMatrix(test_pred, y_test_subset)
+print(confusion)
+```
+
+
+# Train Multinomial Bayes Model using sp

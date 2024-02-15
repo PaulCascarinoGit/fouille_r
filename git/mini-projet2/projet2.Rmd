@@ -1,0 +1,218 @@
+---
+title: "<FONT color='#0066CC'><FONT size = 4 ><DIV align= center> AP-4209 ESIEE-Paris: 2023 -2024 </DIV></FONT></FONT>"
+output:
+  html_document:
+    highlight: textmate
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+---
+
+
+<style type="text/css">
+body, td {font-size: 15px;}
+code.r{font-size: 5px;}
+pre { font-size: 12px;}
+</style>
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+Fouille de données avec R pour la data science et l'intelligence artificielle\
+
+Projet 2 : Analyse factorielle discriminante
+:::
+
+</FONT></FONT>
+
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 1. Chargement et pré-traitement des données
+:::
+
+</FONT></FONT>
+
+# Installation des librairies
+
+
+```{r}
+install.packages("tidyverse")
+install.packages("tm")
+install.packages("slam")
+install.packages("textclean")
+```
+
+# Chargement des librairies
+```{r}
+library(tidyverse)
+library(tm)
+library(slam)
+library(textclean)
+```
+
+# Chargement des données
+```{r}
+# Charger les données
+setwd("C:/Users/mathi/Documents/ESIEE Paris/E4/Fouille de donnée")
+twitter_training <- read.csv("twitter_training.csv", header = FALSE)
+colnames(twitter_training) <- c("ID", "Entity", "Sentiment", "Text")
+```
+```{r}
+head(twitter_training)
+```
+```{r}
+head(twitter_validation)
+```
+
+# Nettoyage des données
+```{r}
+# Fonction de nettoyage
+clean_text <- function(text) {
+  # Supprimer les caractères spéciaux
+  text <- iconv(text, to = "ASCII//TRANSLIT")
+  text <- removePunctuation(text)
+  
+  #URL
+  text <- gsub("http\\S+|www\\S+|https\\S+", "", text, perl = TRUE)
+  
+  # Convertir en minuscules
+  text <- tolower(text)
+  
+  # Supprimer les mots vides
+  text <- removeWords(text, stopwords("fr"))
+  
+  return(text)
+}
+```
+
+```{r}
+# Appliquer la fonction de nettoyage à la colonne "Text" de l'ensemble d'entraînement
+twitter_training$Text <- sapply(twitter_training$Text, clean_text)
+```
+
+```{r}
+# Assignez des valeurs numériques aux catégories de sentiment
+twitter_training$Sentiment_numeric <- as.numeric(factor(twitter_training$Sentiment, levels = c("Positive", "Negative", "Neutral"), labels = c(1, 2, 3)))
+
+# Vérifiez les nouvelles étiquettes numériques
+head(twitter_training[, c("Sentiment", "Sentiment_numeric")])
+
+```
+
+######################################################################
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 2. Ingénierie des caractéristiques (feature engineering):
+:::
+
+</FONT></FONT>
+
+```{r}
+# sous-ensemble des données (1000 premiers) car limite de taille
+subset_data <- twitter_training[1:1000, ]
+
+# On créé un Corpus
+corpus <- Corpus(VectorSource(subset_data$Text))
+```
+
+```{r}
+# Créer une matrice de document-mot avec TF-IDF en limitant le nombre de termes
+dtm <- DocumentTermMatrix(corpus, control = list(weighting = weightTfIdf, minDocFreq = 5, maxDocFreq = 0.95))
+```
+
+```{r}
+# Convertir la matrice en un dataframe
+features_df <- as.data.frame(as.matrix(dtm))
+```
+
+```{r}
+# Ajouter la colonne de l'étiquette numérique
+features_df$Sentiment_numeric <- subset_data$Sentiment_numeric
+```
+
+```{r}
+# Affiche quelques exemples de tweets prétraités
+head(subset_data$Text, n = 5)
+head(features_df[, 1:10])
+```
+
+######################################################################
+
+<FONT color='#0066CC'><FONT size = 4 >
+
+::: {align="center"}
+ 3. Analyse factorielle discriminante
+:::
+
+</FONT></FONT>
+
+```{r}
+install.packages("MASS")
+```
+```{r}
+# Charger la bibliothèque MASS
+library(MASS)
+```
+
+```{r}
+# Créer train_data à partir de features_df :
+train_data <- features_df[, -ncol(features_df)]
+train_data$Sentiment_numeric <- features_df$Sentiment_numeric
+
+# Vérifier la structure de train_data :
+str(train_data)
+```
+
+```{r}
+# Séparer les données en ensembles d'entraînement et de test (80% pour l'entraînement)
+set.seed(123)  # Pour la reproductibilité
+train_indices <- sample(1:nrow(data_for_lda), 0.8 * nrow(data_for_lda))
+train_data <- data_for_lda[train_indices, ]
+test_data <- data_for_lda[-train_indices, ]
+```
+
+```{r}
+# Séparer les étiquettes correspondant aux ensembles d'entraînement et de test
+train_labels <- features_df$Sentiment_numeric[train_indices]
+test_labels <- features_df$Sentiment_numeric[-train_indices]
+```
+
+```{r}
+names(train_data)
+
+```
+
+```{r}
+# Appliquer l'Analyse Discriminante Linéaire (LDA)
+lda_model <- lda(Sentiment_numeric ~ ., data = train_data)
+```
+
+```{r}
+# Projeter les données dans l'espace de dimension inférieure
+lda_projection_train <- predict(lda_model, train_data)$x
+```
+
+```{r}
+# Projeter les données dans l'espace de dimension inférieure
+lda_projection_train <- predict(lda_model, train_data)$x
+lda_projection_test <- predict(lda_model, test_data)$x
+```
+
+```{r}
+# Projeter les données dans l'espace de dimension inférieure
+lda_projection_train <- predict(lda_model, train_data)$x
+lda_projection_test <- predict(lda_model, test_data)$x
+```
