@@ -56,10 +56,6 @@ library(MASS)
 
 
 ```
-__Explication :__
-
-1. `library(dplyr)` charge le package `dplyr` qui offre des fonctions
-  utiles et simples dans la manipulation de données
 
 ### Chargement des données
 
@@ -439,5 +435,5 @@ legend("topright", legend = levels(as.factor(df_test$sentiment)), col = 1:3, pch
 predicted_labels <- predict(afd_model, newdata = df_test)$class
 accuracy <- sum(predicted_labels == df_test$sentiment) / length(df_test$sentiment)
 
-cat("Précision du modèle : ", accuracy, "\n")
+cat("Précision du modèle : ", accuracy)
 ```

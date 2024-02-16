@@ -1,0 +1,139 @@
+---
+title: "Classification Bayésienne et AFD"
+output:
+  html_document:
+    theme: readable
+    toc: yes
+    toc_depth: 6
+    toc_float: yes
+author: "Paul Cascarino et Mathis Quinio-Cosquer"
+date: "Janvier 2023"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(reticulate)
+library(readr)
+
+```
+
+# Projet 3 : 
+
+## 1. Introduction
+
+### Les objectifs du projet
+Le but de ce projet est de réduire la dimensionnalité des données 
+sur le thèses de doctorat françaisee afin d'effectuer une classification 
+bayesienne sur la nature textuelle et sémantique des données.
+
+
+Ainsi nous devons mettre en place une classification bayésienne avancé avec AFD
+afin de les catégoriser en domaines d'étude.
+
+
+## 2. Chargement et exploration des données
+
+### Préparation et imports
+Dans un premier temps, nous effaçons la mémoire : 
+```{r}
+rm(list=ls())
+```
+
+Et faisons les chargements des packages nécessaires : 
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+
+# Permet la tokenization : https://smltar.com/tokenization#types-of-tokens 
+library(tokenizers)
+
+# Permet l'utilisation de liste pour le stop-words : https://smltar.com/stopwords#premadestopwords
+library(stopwords)
+
+# Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
+library(SnowballC)
+
+library(tm)
+library(text2vec)
+library(slam)
+
+# Installer et charger le package 'MASS' pour l'Analyse Discriminante Linéaire (LDA)
+# install.packages("MASS")
+library(MASS)
+
+```
+
+### Chargement et exploration des données
+
+Les données sont récupérés sur le site kaggle à l'adresse : <https://www.kaggle.com/code/antoinebourgois2/4-french-doctoral-theses-semantic-search-tool>
+Nous pouvons ainsi récupérer le csv récupéré avec : 
+
+```{r}
+df <- read.csv('data/french_thesis_20231021_metadata.csv')
+
+head(df)
+```
+
+Réduisons notre df: 
+```{r}
+dim(df)
+
+set.seed(13)
+
+nbr_row_little_df <- 10000
+
+little_df <- df[sample(nrow(df), nbr_row_little_df),]
+
+dim(little_df)
+
+```
+
+Nous avons un dataframe de base avec : 
+- 519578 lignes 
+- 8 colonnes
+
+Et un dataframe réduit ('little_df')  avec : 
+- 'nbr_row_little_df' lignes 
+- 8 colonnes
+
+Regardons les noms des colonnes : 
+
+```{r}
+colnames(df)
+```
+
+Nous avons les colonnes : 
+- __URL__ : L url de la thèse
+- __Title__ : Le titre de la thèse      
+- __Author__ : L auteur de la thèse    
+- __Description__ : La description de la thèse
+- __Direction__ : Le directeur et son id de la thèse
+- __Domain__ : Le domaine de la thèse
+- __Statuts__ : Le status de la thèse 
+- __Date__ : La date de la thèse
+
+### Nettoyage des données textuelles
+
+### Vectirisation avec un TF IDF
+
+## 3. Extraction de caractéristiue et réduction de dimensionnalité
+
+### Appliquez la modélisation thématique (topic modeling) si nécessaire.
+
+### LDA
+
+## 4. Classification bayésienne 
+
+### Classifieur bayésien naïf
+
+### Validation croisée pour l'Évaluation
+
+## 5. Optimisation et Évaluation
+
+### Ajustez les hyperparamètres
+
+### Evaluation du modèle 
