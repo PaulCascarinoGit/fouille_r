@@ -37,6 +37,24 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 
+# Permet la tokenization : https://smltar.com/tokenization#types-of-tokens 
+library(tokenizers)
+
+# Permet l'utilisation de liste pour le stop-words : https://smltar.com/stopwords#premadestopwords
+library(stopwords)
+
+# Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
+library(SnowballC)
+
+library(tm)
+library(text2vec)
+library(slam)
+
+# Installer et charger le package 'MASS' pour l'Analyse Discriminante Linéaire (LDA)
+# install.packages("MASS")
+library(MASS)
+
+
 ```
 __Explication :__
 
@@ -56,6 +74,16 @@ head(df_train)
 ```
 __Explication :__ Les premières lignes sont des données et non le nom des colonnes
 D'où le __header=FALSE__
+
+Réduisons nos df : 
+```{r}
+set.seed(13)  
+
+df_train <- df_train[sample(nrow(df_train), 10000),]
+
+df_test <- df_test[sample(nrow(df_test), 10000),]
+
+```
 
 
 ### Analyse exploratoire des données
@@ -79,10 +107,24 @@ colnames(df_test) <- names
 colnames(df_train)
 ```
 
+Conertissons les variables en facteurs
+```{r} 
+df_train$sentiment <- as.factor(df_train$sentiment)
+df_train$entity <- as.factor(df_train$entity)
+df_test$sentiment <- as.factor(df_test$sentiment)
+df_test$entity <- as.factor(df_test$entity)
+```
+
 Nous remarquons que nous avons 2700 éléments dupliqués dans notre train_df : 
 ```{r}
 sum(duplicated(df_train))
 sum(duplicated(df_test))
+```
+
+Supprimons les avec :
+```{r}
+df_train <- unique(df_train)
+df_test <- unique(df_test)
 ```
 
 Nous requons aussi qu'il n'y a pas d'éléments nuls
@@ -185,16 +227,217 @@ Pour cela nous allons créer une fonction qui vas :
 
 clean_text <- function(df_col){
   temp_col <- str_to_lower(df_col)
-
-  # nbr_comment_false_char <- sum( ! str_detect(df$Comment, '[[:alnum:]]') == TRUE)
-  # nbr_comment_num <- sum(str_detect(df$Comment, '^[0-9]') == TRUE)
-  # nbr_comment_with_punct <- sum(str_detect(df$Comment, '[[:punct:]]') == TRUE)
+  temp_col <- str_replace_all(temp_col, "[0-9]", "")
+  temp_col <- str_replace_all(temp_col, "[^[:alnum:][:space:]]", "")
   return(temp_col)
 }
 
 df_train$content <- clean_text(df_train$content)
 df_test$content <- clean_text(df_test$content)
 
-head(df_train$content)  
+head(df_train$content)
 ```
 
+La fonction __clean_text__ nous permet de supprimer les caractères non alphanumériques
+et les chiffres ainsi que de touus mettre en minuscule. 
+
+Nous pouvons maintenant apppliquer la Tokenization : 
+
+###### Tokenization
+
+#### Tokenization
+
+https://smltar.com/tokenization
+
+Nous décidons dans un premier temps de faire une tokenization par mots car c est la méthode la 
+plus commune et que cela nous parait logique de travailler dans un premier temps avec les mots.
+
+De plus nous avons vu grâce au mini projet 1 que c'est la plus performante par rapports 
+à la tokenization ppar pluusieurs mots en terme d'accuracy : 
+
+```{r}
+df_train$token <- tokenize_words(df_train$content)
+df_test$token <- tokenize_words(df_test$content)
+
+head(df_train$token)
+```
+
+Nous pouvons maintenant observer les tokens les plus utilisés : 
+
+Utilisons la fonction duu mini-projet 1 : 
+
+```{r}
+give_most_words <- function(df_tokens, col_names, n){
+  token_freq <- table(unlist(df_tokens[[col_names]]))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  plot <- ggplot(token_freq_df[0:n,], aes(x=reorder(token, -frequency), y=frequency)) +
+            geom_bar(stat = 'identity')
+  return(list(plot=plot, df=token_freq_df))
+}
+result <- give_most_words(df_train[, c('token', 'entity')], 'token', 10)
+result$plot
+```
+
+__Explication :__
+
+Nous avons définit une fonction qui permet de retourner un graph des n premiers mots et longeurs
+fréquences d apparition dans notre df. 
+
+
+Nous remarquons que nous avons une liste de mots inutiles. Regardons maintenant les stop words : 
+
+##### Stop words
+
+Les __stop words__ sont les mots qui n ont pas d intérêts dans le sens de la phrase.
+Ansi les supprimer réduirait le nombre de feature et donc le nombre de calculs.
+Nous pouvons aussi penser que réduire les mots inutiles réduirait la performance de notre futur modèle.
+
+Pour cela nous allons utiliser une liste de stop words déjà faite,
+Nous allons donc utiliser la bibliothèque __smart__
+```{r}
+head(stopwords::stopwords(source = "smart"))
+```
+
+```{r}
+cat("Nombre de mots avant l'étape des stop words : ",
+sum(lengths(df_train$token)))
+
+df_train$token <- sapply(df_train$token, function(x) setdiff(x, stopwords::stopwords(source = "smart")))
+df_test$token <- sapply(df_test$token, function(x) setdiff(x, stopwords::stopwords(source = "smart")))
+
+result <- give_most_words(df_train[, c('token', 'entity')], 'token', 10)
+
+cat("Nombre de mots après l'étape des stop words : ",
+sum(lengths(df_train$token)))
+
+result$plot
+```
+
+Nous venons de suupprimer les mots les plus inutiles qui sont dans la bibliothèque __smart__
+
+##### Stemming 
+
+Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' en un stem qui 
+est un mot de base (ex:'feel').
+
+```{r}
+df_train$token <- lapply(df_train$token, function(x) wordStem(x))
+df_test$token <- lapply(df_test$token, function(x) wordStem(x))
+result <- give_most_words(df_train[, c('token', 'entity')], 'token', 10)
+
+result$plot
+```
+
+Nous remarquons que nous avons rassembler des mots similaires entre eux.
+
+#### TF-IDF
+
+On a :
+ $$
+\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
+$$
+avec 
+
+- N : le nombre documents total
+- df(t) : le nombre de documents comportant le terme t
+
+Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
+Cela correspond à l importance du mot dans notre corpus de documents.
+
+##### TF-IDF
+
+On a :
+$$
+\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
+$$
+avec 
+
+- N : le nombre documents total
+- df(t) : le nombre de documents comportant le terme t
+
+Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
+Cela correspond à l importance du mot dans notre corpus de documents.
+
+```{r}
+# give_tfidf <- function(df_train, df_test){
+
+#   combined_corpus <- Corpus(VectorSource(c(df_train, df_test)))
+#   combined_dtm <- DocumentTermMatrix(combined_corpus)
+
+#   dtm_train <- combined_dtm[1:length(df_train), ]
+#   tfidf_train <- as.matrix(weightTfIdf(dtm_train))
+  
+#   # Appliquez la pondération TF-IDF à l'ensemble de test en utilisant le vocabulaire de l'ensemble d'entraînement
+#   tfidf_test <- as.matrix(weightTfIdf(DocumentTermMatrix(Corpus(VectorSource(df_test)), control = list(dictionary = Terms(dtm_train)))))
+
+#   return(list(train = tfidf_train, test = tfidf_test))
+# }
+# tfidfs <- give_tfidf(df_train$token, df_test$token)
+
+# df_train$tfidf <- tfidfs$train
+# df_test$tfidf <- tfidfs$test
+
+```
+
+```{r}
+give_tfidf <- function(df_train, df_test, term_count_min){
+
+    # Créer un itoken
+  itoken_train <- itoken(df_train$token)
+  itoken_test <- itoken(df_test$token)
+  
+  # Créer le vocabulaire
+  vocabulary <- create_vocabulary(itoken_train)
+  vocabulary <- prune_vocabulary(vocabulary, term_count_min)
+
+  vectorizer <- vocab_vectorizer(vocabulary)
+
+  dtm_train <- create_dtm(itoken_train, vectorizer)
+  dtm_test <- create_dtm(itoken_test, vectorizer)
+
+  train_matrix <- as.matrix(as(dtm_train, "CsparseMatrix"))
+  test_matrix <- as.matrix(as(dtm_test, "CsparseMatrix"))
+
+  return(list(train = train_matrix, test = test_matrix))
+}
+tfidfs <- give_tfidf(df_train, df_test, 5)
+
+df_train$tfidf <- tfidfs$train
+df_test$tfidf <- tfidfs$test
+
+```
+
+### Justification de l'AFD
+
+L'AFD est utilisé pour réduire la dimensionnalité de nos données. 
+Dans notre exemple nous avons 3 colonne pour utiles ce qui difficilement visualisable.
+
+Ainsi l'AFD peut aider à révéler des tendances et des clusters entre les tweets.
+
+Appliquons maintenant l'AFD avec LDA (Analyse Discriminante Linéaire)
+
+
+```{r}
+afd_model <- MASS::lda(sentiment ~ tfidf + entity, data = df_train)
+```
+
+```{r}
+selected_columns <- c("tfidf", "entity", "sentiment")
+projected_data <- predict(afd_model, newdata = df_test[selected_columns])$x
+```
+
+```{r}
+# Visualisation des résultats de l'AFD en deux dimensions
+plot(projected_data[, 1], projected_data[, 2], col = as.factor(df_test$sentiment),
+     pch = 19, main = "Visualisation des résultats de l'AFD", xlab = "LD1", ylab = "LD2")
+
+# Légende
+legend("topright", legend = levels(as.factor(df_test$sentiment)), col = 1:3, pch = 19, title = "Sentiment")
+
+# Évaluation du modèle (précision dans ce cas)
+predicted_labels <- predict(afd_model, newdata = df_test)$class
+accuracy <- sum(predicted_labels == df_test$sentiment) / length(df_test$sentiment)
+
+cat("Précision du modèle : ", accuracy, "\n")
+```
