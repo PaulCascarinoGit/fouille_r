@@ -2,3 +2,4 @@
 [[:space:]]train_drcat_02.csv filter=lfs diff=lfs merge=lfs -text
 [[:space:]]train_drcat_03.csv filter=lfs diff=lfs merge=lfs -text
 [[:space:]]train_drcat_04.csv filter=lfs diff=lfs merge=lfs -text
+french_thesis_20231021_metadata.csv filter=lfs diff=lfs merge=lfs -text
