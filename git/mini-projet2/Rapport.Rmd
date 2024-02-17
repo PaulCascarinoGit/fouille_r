@@ -103,7 +103,7 @@ colnames(df_test) <- names
 colnames(df_train)
 ```
 
-Conertissons les variables en facteurs
+Convertissons les variables catégorielles en facteurs
 ```{r} 
 df_train$sentiment <- as.factor(df_train$sentiment)
 df_train$entity <- as.factor(df_train$entity)

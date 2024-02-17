@@ -13,12 +13,6 @@ date: "Janvier 2023"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r}
-library(reticulate)
-library(readr)
-
-```
-
 # Projet 3 : 
 
 ## 1. Introduction
@@ -74,7 +68,11 @@ Nous pouvons ainsi récupérer le csv récupéré avec :
 
 ```{r}
 df <- read.csv('data/french_thesis_20231021_metadata.csv')
+dim(df)
 
+df <- subset(df, !(is.na(Description) | Description == ""))
+df <- subset(df, !(is.na(Title) | Title == ""))
+dim(df)
 head(df)
 ```
 
@@ -107,25 +105,305 @@ colnames(df)
 ```
 
 Nous avons les colonnes : 
+
 - __URL__ : L url de la thèse
-- __Title__ : Le titre de la thèse      
-- __Author__ : L auteur de la thèse    
+
+- __Title__ : Le titre de la thèse 
+
+- __Author__ : L auteur de la thèse (catégorielle)
+
 - __Description__ : La description de la thèse
-- __Direction__ : Le directeur et son id de la thèse
-- __Domain__ : Le domaine de la thèse
-- __Statuts__ : Le status de la thèse 
+
+- __Direction__ : Le directeur de thèse et son id (catégorielle)
+
+- __Domain__ : Le domaine de la thèse (catégorielle)
+
+- __Statuts__ : Le status de la thèse (catégorielle)
+
 - __Date__ : La date de la thèse
+
+Convertissons nos variables catégorielles en facteurs : 
+
+```{r}
+df$Author <- as.factor(df$Author)
+df$Domain <- as.factor(df$Domain)
+df$Statuts <- as.factor(df$Statuts)
+df$Direction <- as.factor(df$Direction)
+
+little_df$Author <- as.factor(little_df$Author)
+little_df$Domain <- as.factor(little_df$Domain)
+little_df$Statuts <- as.factor(little_df$Statuts)
+little_df$Direction <- as.factor(little_df$Direction)
+
+cat('Nombre d auteurs : ',length(levels(df$Author)))
+cat('Nombre de domaines : ',length(levels(df$Domain)))
+cat('Les différents statuts : ',levels(df$Statuts))
+cat('Nombre des directeurs de thèse : ',length(levels(df$Direction)))
+```
 
 ### Nettoyage des données textuelles
 
-### Vectirisation avec un TF IDF
+Nous avons 2 colonnes avec des données textuelles non catégorielle : __Title__ et __Description__
 
-## 3. Extraction de caractéristiue et réduction de dimensionnalité
+Pour nétoyer nous allons créer une fonction qui vas : 
+- mettre tous les textes en minuscule
+- supprimer les chiffres
+- supprimer tous les caractères spéciaux
+
+```{r}
+
+clean_text <- function(df_col){
+  temp_col <- str_to_lower(df_col)
+  temp_col <- str_replace_all(temp_col, "'", " ") 
+  temp_col <- str_replace_all(temp_col, "[0-9]", "")
+  temp_col <- str_replace_all(temp_col, "[^[:alnum:][:space:]]", "")
+
+  return(temp_col)
+}
+
+# df$Title_tidy <- clean_text(df$Title)
+# df$Description_tidy <- clean_text(df$Description)
+
+little_df$Title_tidy <- clean_text(little_df$Title)
+little_df$Description_tidy <- clean_text(little_df$Description)
+
+head(df$Title_tidy)
+```
+
+La fonction __clean_text__ nous permet de supprimer les caractères non alphanumériques
+et les chiffres ainsi que de touus mettre en minuscule. 
+
+Nous pouvons maintenant apppliquer la Tokenization : 
+
+#### Tokenization
+
+https://smltar.com/tokenization
+
+Nous décidons dans un premier temps de faire une tokenization par mots car c est la méthode la 
+plus commune et que cela nous parait logique de travailler dans un premier temps avec les mots.
+
+De plus nous avons vu grâce au mini projet 1 que c'est la plus performante par rapports 
+à la tokenization ppar pluusieurs mots en terme d'accuracy : 
+
+```{r}
+# df$Title_token <- tokenize_words(df$Title_tidy)
+# df$Description_token <- tokenize_words(df$Description_tidy)
+
+little_df$Title_token <- tokenize_words(little_df$Title_tidy)
+little_df$Description_token <- tokenize_words(little_df$Description_tidy)
+
+head(little_df$Title_token)
+```
+
+Nous pouvons maintenant observer les tokens les plus utilisés : 
+
+Utilisons la fonction du mini-projet 1 : 
+
+```{r}
+give_most_words <- function(df_tokens, col_names, n){
+  token_freq <- table(unlist(df_tokens[[col_names]]))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  plot <- ggplot(token_freq_df[0:n,], aes(x=reorder(token, -frequency), y=frequency)) +
+            geom_bar(stat = 'identity')
+  return(list(plot=plot, df=token_freq_df))
+}
+result <- give_most_words(little_df[, c('Description_token', 'Domain')], 'Description_token', 10)
+result1 <- give_most_words(little_df[, c('Title_token', 'Domain')], 'Title_token', 10)
+
+result$plot
+result1$plot
+```
+
+__Explication :__
+
+Nous avons définit une fonction qui permet de retourner un graph des n premiers mots et longeurs
+fréquences d apparition dans notre df. 
+
+
+Nous remarquons que nous avons une liste de mots inutiles. Regardons maintenant les stop words : 
+
+##### Stop words
+
+Les __stop words__ sont les mots qui n ont pas d intérêts dans le sens de la phrase.
+Ansi les supprimer réduirait le nombre de feature et donc le nombre de calculs.
+Nous pouvons aussi penser que réduire les mots inutiles réduirait la performance de notre futur modèle.
+
+Pour cela nous allons utiliser une liste de stop words déjà faite,
+Nous allons donc utiliser la bibliothèque __stopwords-iso__ en français.
+```{r}
+stopwords::stopwords_getlanguages("stopwords-iso")
+```
+
+Nous observons que nouus avons bien le français avec 'fr'
+
+```{r}
+head(stopwords::stopwords("fr", source = "stopwords-iso"))
+```
+```{r}
+cat("Nombre de mots des Titres avant l'étape des stop words : ",
+sum(lengths(df$Title_token)))
+
+cat("Nombre de mots des Description avant l'étape des stop words : ",
+sum(lengths(df$Description_token)))
+
+# df$Title_token <- sapply(df$Title_token, function(x) setdiff(x, stopwords::stopwords("fr", source = "stopwords-iso")))
+# df$Description_token <- sapply(df$Description_token, function(x) setdiff(x, stopwords::stopwords("fr", source = "stopwords-iso")))
+
+little_df$Title_token <- sapply(little_df$Title_token, function(x) setdiff(x, stopwords::stopwords("fr", source = "stopwords-iso")))
+little_df$Description_token <- sapply(little_df$Description_token, function(x) setdiff(x, stopwords::stopwords("fr", source = "stopwords-iso")))
+
+
+result <- give_most_words(little_df[, c('Description_token', 'Domain')], 'Description_token', 10)
+result1 <- give_most_words(little_df[, c('Title_token', 'Domain')], 'Title_token', 10)
+
+result$plot
+result1$plot
+
+cat("Nombre de mots des Titres après l'étape des stop words : ",
+sum(lengths(little_df$Title_token)))
+
+cat("Nombre de mots des Description après l'étape des stop words : ",
+sum(lengths(little_df$Description_token)))
+result$plot
+```
+
+Nous venons de suupprimer les mots les plus inutiles qui sont dans la bibliothèque __smart__
+
+##### Stemming 
+
+Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' en un stem qui 
+est un mot de base (ex:'feel').
+
+```{r}
+little_df$Title_token <- lapply(little_df$Title_token, function(x) wordStem(x, language = "french"))
+little_df$Description_token <- lapply(little_df$Description_token, function(x) wordStem(x, language = "french"))
+
+result <- give_most_words(little_df[, c('Description_token', 'Domain')], 'Description_token', 10)
+result1 <- give_most_words(little_df[, c('Title_token', 'Domain')], 'Title_token', 10)
+
+result$plot
+result1$plot
+```
+
+Nous remarquons que nous avons rassembler des mots similaires entre eux.
+
+### Vectorisation avec un TF IDF
+
+On a :
+ $$
+\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
+$$
+avec 
+
+- N : le nombre documents total
+- df(t) : le nombre de documents comportant le terme t
+
+Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
+Cela correspond à l importance du mot dans notre corpus de documents.
+
+```{r}
+give_tfidf <- function(ldf, term_count_min){
+
+    # Créer un itoken
+  itoken_Description <- itoken(ldf$Description_token)
+  itoken_Tittle <- itoken(ldf$Title_token)
+  
+  # Créer le vocabulaire
+  vocabulary_Description <- create_vocabulary(itoken_Description)
+  vocabulary_Tittle <- create_vocabulary(itoken_Tittle)
+
+  vocabulary_Description <- prune_vocabulary(vocabulary_Description, term_count_min)
+  vocabulary_Tittle <- prune_vocabulary(vocabulary_Tittle, term_count_min)
+
+  vectorizer_Description <- vocab_vectorizer(vocabulary_Description)
+  vectorizer_Tittle <- vocab_vectorizer(vocabulary_Tittle)
+
+  dtm_Description <- create_dtm(itoken_Description, vectorizer_Description)
+  dtm_Tittle <- create_dtm(itoken_Tittle, vectorizer_Tittle)
+
+  Description_matrix <- as.matrix(as(dtm_Description, "CsparseMatrix"))
+  Tittle_matrix <- as.matrix(as(dtm_Tittle, "CsparseMatrix"))
+
+  return(list(Description= Description_matrix, Tittle = Tittle_matrix))
+}
+tfidfs <- give_tfidf(little_df, 5)
+
+little_df$tfidf_Description <- tfidfs$Description
+little_df$tfidf_Tittle <- tfidfs$Tittle
+```
+
+```{r}
+afd_model <- MASS::lda(Statuts ~ tfidf_Description + tfidf_Tittle, data = little_df)
+```
+
+## 3. Extraction de caractéristique et réduction de dimensionnalité
 
 ### Appliquez la modélisation thématique (topic modeling) si nécessaire.
 
+
+```{r}
+library(tm)
+library(topicmodels)
+
+# Utilisez la matrice TF-IDF directement
+tfidf_matrix <- as.matrix(tfidfs$Description)
+
+# Spécifiez le nombre de sujets (topics) que vous souhaitez extraire
+num_topics <- 5  # Vous pouvez ajuster ce nombre en fonction de vos besoins
+
+# Appliquez le modèle LDA
+lda_model <- LDA(tfidf_matrix, k = num_topics, control = list(seed = 1234))
+
+# Affichez les termes les plus représentatifs pour chaque sujet
+terms(lda_model)
+
+# Affichez la distribution des sujets pour chaque document
+doc_topics <- as.matrix(topics(lda_model, 1))
+head(doc_topics)
+```
+
 ### LDA
 
+```{r}
+
+X <- cbind(little_df$tfidf_Description, little_df$tfidf_Tittle, little_df$Domain)
+
+lda_result <- MASS::lda(X, method = "moment")
+
+# Nouvelles caractéristiques après LDA
+lda_features <- predict(lda_result)$x
+
+# Afficher les résultats
+print(lda_result)
+```
+
+
+```{r}
+#afd_model <- MASS::lda( Domain ~ tfidf_Description + tfidf_Tittle + Author + Direction + Statuts, data = little_df)
+# afd_model <- MASS::lda( Domain ~ tfidf_Description + tfidf_Tittle, data = little_df)
+```
+
+```{r}
+selected_columns <- c("Domain", "tfidf_Description", "tfidf_Tittle")
+projected_data <- predict(afd_model, newdata = little_df[selected_columns])$x
+
+```
+
+```{r}
+# # Visualisation des résultats de l'AFD en deux dimensions
+# plot(projected_data[, 1], projected_data[, 2], col = as.factor(little_df$Domain),
+#      pch = 19, main = "Visualisation des résultats de l'AFD", xlab = "LD1", ylab = "LD2")
+
+# # Légende
+# legend("topright", legend = levels(as.factor(little_df$Domain)), col = 1:3, pch = 19, title = "Domain")
+
+# # Évaluation du modèle (précision dans ce cas)
+# predicted_labels <- predict(afd_model, newdata = little_df)$class
+# accuracy <- sum(predicted_labels == little_df$Domain) / length(little_df$Domain)
+
+# cat("Précision du modèle : ", accuracy)
+```
 ## 4. Classification bayésienne 
 
 ### Classifieur bayésien naïf
