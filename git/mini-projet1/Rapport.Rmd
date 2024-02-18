@@ -365,7 +365,6 @@ tfidf <- weightTfIdf(temp_df_dtm)
 tfidf
 ```
 
-#### Pourquoi ce feature engineering ?
 
 ## 4. Entrainement du modèle bayésien
 
@@ -412,13 +411,13 @@ test_bayesian <- function(df_temp, df){
   #print(temp_df)
   temp_df_corpus <- Corpus(VectorSource(temp_df))
 
-  # Créer un Document-Term Matrix (DTM)
+
   temp_df_dtm <- DocumentTermMatrix(temp_df_corpus)
 
-  # Convertir la DTM en matrice creuse (sparse matrix)
   temp_df_sparse <- as.matrix(temp_df_dtm)
   print(temp_df_sparse)
   #print(temp_df_sparse)
+  
   # TF IDF
   tfidf <- weightTfIdf(temp_df_dtm)
 
@@ -456,6 +455,7 @@ test_bayesian2 <- function(df_temp, df, term_count_min, seed){
   temp_df <- df_temp
   
   set.seed(seed)
+  
   # Définir le pourcentage des données d'entraînement sur le total
   percentage_train <- 0.70
 
@@ -467,11 +467,11 @@ test_bayesian2 <- function(df_temp, df, term_count_min, seed){
   y_train <- factor(df$Emotion[train_indices])
   y_test <- factor(df$Emotion[-train_indices])
 
-  # Créer un itoken
+
   itoken_train <- itoken(X_train)
   itoken_test <- itoken(X_test)
   
-  # Créer le vocabulaire
+
   vocabulary <- create_vocabulary(itoken_train)
   vocabulary <- prune_vocabulary(vocabulary, term_count_min)
 
@@ -490,10 +490,17 @@ test_bayesian2 <- function(df_temp, df, term_count_min, seed){
   accuracy <- sum(predictions == y_test) / length(y_test)
   confusion <- confusionMatrix(predictions, y_test)
   return(accuracy)
-  #print(confusion)
+  print(confusion)
 }
 ```
 
+### 5. Evaluation et amélioration du modèle
+
+Nous testons maintenant notre modèle sur tous le préprocessing crées.
+
+Pour ne pas avoir un runtime énome nous avons mis nos modèles en commentaires.
+
+Maais chacun a été testé et le meilleur est test_bayesian2(df$t1_smart_stem, df, j, i)
 ```{r}
 # test_bayesian2(df$tokenize_1words[1:500], df[1:500,])
 # test_bayesian2(df$tokenize_2words[1:500], df[1:500,])
@@ -503,45 +510,35 @@ test_bayesian2 <- function(df_temp, df, term_count_min, seed){
 # test_bayesian2(df$t1_iso[1:500], df[1:500,])
 # test_bayesian2(df$t1_snow_stem[1:500], df[1:500,])
 # test_bayesian2(df$t1_smart_stem[1:500], df[1:500,])
-
-
-seq_seed <- seq(1, 100, by = 10)
-seq_min <- seq(5, 25, by = 5)
-accuracy_values <- c()
-for (j in seq_min){
-  print(j)
-  for(i in seq_seed){
-    accuracy <- test_bayesian2(df$t1_smart_stem, df, j, i)
-    #
-    print(accuracy)
-    accuracy_values <- c(accuracy_values, accuracy)
-  } 
-  print(mean(accuracy)) 
-}
-
+test_bayesian2(df$t1_smart_stem, df, 15,35)
 ```
 
+Permet l'amélioration du modèle :
 
-#### Pourquoi ce feature engineering ?
+```{r}
+# seq_seed <- seq(1, 100, by = 10)
+# seq_min <- seq(5, 25, by = 5)
+# accuracy_values <- c()
+# for (j in seq_min){
+#   print(j)
+#   for(i in seq_seed){
+#     accuracy <- test_bayesian2(df$t1_smart_stem, df, j, i)
+    
+#     print(accuracy)
+#     accuracy_values <- c(accuracy_values, accuracy)
+#   } 
+#   print(mean(accuracy)) 
+# }
+```
 
-## 4. Entrainement du modèle bayésien
+## 6. Conclusion et travaux à venir
 
-
-## 5. Evaluation du modèle
-### Les résultats
-### Les mesures d'évaluation du modèle
-### Les validations croisées effectuées 
-
-## 6. Amélioration et optimisation
-### Discussion des défis rencontrés
-### Raison de la performance du modèle
-### Amélioration
-
-## 7. Conclusion et travaux à venir
 ### Conclusion
+
+Nous obtenons une accuracy d environ 60%, ce montre que notre modèle fonctionne bien sur plusieurs seed 
+
 ### Améliorations possibles
 
-
-#### Pourquoi ce feature engineering ?
-
-## 4. Entrainement du modèle bayésien
+Nous n'avons pas eu le temps de faire la validation croisé de manière convenable ainsi que la présentation des résultats.
+Nous nous sommes donc concentrés sur le travail en fouille et permettre d'obtenir le meilleur preprocessing car les aspects manquants 
+sont dévelopés dans d'autres matières. (en python).

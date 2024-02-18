@@ -333,9 +333,6 @@ little_df$tfidf_Description <- tfidfs$Description
 little_df$tfidf_Tittle <- tfidfs$Tittle
 ```
 
-```{r}
-afd_model <- MASS::lda(Statuts ~ tfidf_Description + tfidf_Tittle, data = little_df)
-```
 
 ## 3. Extraction de caractéristique et réduction de dimensionnalité
 
@@ -343,75 +340,50 @@ afd_model <- MASS::lda(Statuts ~ tfidf_Description + tfidf_Tittle, data = little
 
 
 ```{r}
-library(tm)
-library(topicmodels)
+# library(tm)
+# library(topicmodels)
 
-# Utilisez la matrice TF-IDF directement
-tfidf_matrix <- as.matrix(tfidfs$Description)
 
-# Spécifiez le nombre de sujets (topics) que vous souhaitez extraire
-num_topics <- 5  # Vous pouvez ajuster ce nombre en fonction de vos besoins
+# tfidf_matrix <- as.matrix(tfidfs$Description)
 
-# Appliquez le modèle LDA
-lda_model <- LDA(tfidf_matrix, k = num_topics, control = list(seed = 1234))
 
-# Affichez les termes les plus représentatifs pour chaque sujet
-terms(lda_model)
+# num_topics <- 5 
 
-# Affichez la distribution des sujets pour chaque document
-doc_topics <- as.matrix(topics(lda_model, 1))
-head(doc_topics)
+
+# lda_model <- LDA(tfidf_matrix, k = num_topics, control = list(seed = 1234))
+
+
+# terms(lda_model)
+
+
+# doc_topics <- as.matrix(topics(lda_model, 1))
+# head(doc_topics)
 ```
 
 ### LDA
 
 ```{r}
 
-X <- cbind(little_df$tfidf_Description, little_df$tfidf_Tittle, little_df$Domain)
+# X <- cbind(little_df$tfidf_Description, little_df$tfidf_Tittle, little_df$Domain)
 
-lda_result <- MASS::lda(X, method = "moment")
+# lda_result <- MASS::lda(X, method = "moment")
 
-# Nouvelles caractéristiques après LDA
-lda_features <- predict(lda_result)$x
 
-# Afficher les résultats
-print(lda_result)
+# lda_features <- predict(lda_result)$x
+
+
+# print(lda_result)
 ```
+
 
 
 ```{r}
-#afd_model <- MASS::lda( Domain ~ tfidf_Description + tfidf_Tittle + Author + Direction + Statuts, data = little_df)
-# afd_model <- MASS::lda( Domain ~ tfidf_Description + tfidf_Tittle, data = little_df)
-```
-
-```{r}
-selected_columns <- c("Domain", "tfidf_Description", "tfidf_Tittle")
-projected_data <- predict(afd_model, newdata = little_df[selected_columns])$x
+# selected_columns <- c("Domain", "tfidf_Description", "tfidf_Tittle")
+# projected_data <- predict(afd_model, newdata = little_df[selected_columns])$x
 
 ```
 
-```{r}
-# # Visualisation des résultats de l'AFD en deux dimensions
-# plot(projected_data[, 1], projected_data[, 2], col = as.factor(little_df$Domain),
-#      pch = 19, main = "Visualisation des résultats de l'AFD", xlab = "LD1", ylab = "LD2")
+## 4. Conclusion
 
-# # Légende
-# legend("topright", legend = levels(as.factor(little_df$Domain)), col = 1:3, pch = 19, title = "Domain")
-
-# # Évaluation du modèle (précision dans ce cas)
-# predicted_labels <- predict(afd_model, newdata = little_df)$class
-# accuracy <- sum(predicted_labels == little_df$Domain) / length(little_df$Domain)
-
-# cat("Précision du modèle : ", accuracy)
-```
-## 4. Classification bayésienne 
-
-### Classifieur bayésien naïf
-
-### Validation croisée pour l'Évaluation
-
-## 5. Optimisation et Évaluation
-
-### Ajustez les hyperparamètres
-
-### Evaluation du modèle 
+Nous n'avons pas eu le temps de finir le projet à cause de trop nombreux problème,
+nous avons préféré accordé le temps restant au projet final...

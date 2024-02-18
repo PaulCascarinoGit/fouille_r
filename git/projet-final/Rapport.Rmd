@@ -93,6 +93,27 @@ df_essays <- read.csv(path_essays)
 df_prompts <- read.csv(path_prompts)
 ```
 
+Nous verrons par la suite que le df ne sera paas suffisant, 
+ainsi nous commençons intégrons dès à présent de nouvelles variables : 
+```{r}
+df_comp <- read.csv('datasets/train_drcat_03.csv')
+head(df_comp$fold)
+
+colnames(df_comp) <- c('id', 'text', 'generated', 'del', 'del2', 'prompt_id' )
+colnames(df_essays)
+
+df_comp <- subset(df_comp, select=c('id', 'text', 'generated', 'prompt_id'))
+df_comp <- df_comp[, colnames(df_essays)]
+
+dim(df_essays)
+dim(df_comp)
+
+df_essays <- rbind(df_essays, df_comp)
+
+# Afficher les nouvelles colonnes de df_essays
+dim(df_essays)
+```
+
 #### Description d essays : 
 
 Voici un aperçu de nos données : 
@@ -127,7 +148,7 @@ par un homme (generated  = 0)
 ```{r}
 dim(df_essays)
 ```
-Nous avons une liste de 1378 essays et donc de 4 colonnes cités ci-dessus
+Nous avons une liste de 43584 essays et donc de 4 colonnes cités ci-dessus
 
 ```{r}
 summary(df_essays)
@@ -137,16 +158,18 @@ Nous remarquons que :
 
 - "id" : contient des caractères       
 
-- "prompt_id" : a un min à 0.0000 et a un max à 1.0000
+- "prompt_id" : l'id des prompt
 
 - "text" : le texte de l'essay    
 
-- "generated" :  a une moyenne de 0.002177 ce qui signifierait plus
-  essays générés par l'Homme (0)
+- "generated" :  a une moyenne de 0.312 ce qui signifierait plus
+  essays générés par l'Homme (plus proche de 0)
 
 
-Nous remarquons qu'il n'y a pas d'éléments dupliqués : 
+Nous supprimons les éléments dupliqués : 
 ```{r}
+sum(duplicated(df_essays))
+df_essays <- unique(df_essays)
 sum(duplicated(df_essays))
 ```
 
@@ -386,6 +409,17 @@ Nous remarquons bien la différence après l étape du stemming et l appartition
 
 ## 3. Extraction de caractéristiques (Feature Extraction)
 
+#### Réduction des données
+
+Pour réduire le runtime
+```{r}
+nbr_row_little_df <- 10000
+
+df <- df[sample(nrow(df), nbr_row_little_df),]
+
+dim(df)
+```
+
 ### Caractéristiques linguistiques et stylométriques
 
 Regardons certaines caractéristiques qui pourraient différencier les écrits humains aux IA : 
@@ -501,28 +535,29 @@ dim(df_plus)
 
 ```
 
+Avec l'import de nouvelles données l étaape du suréchaantillonnage 
+ne vas pas être prise en compte.
+
 
 #### Séparation en données d'entrainements et de test
 ```{r}
 set.seed(1)
 
+
 pourcentage <- 0.7
 
-indices <- createDataPartition(df_plus$generated, p = pourcentage, list = FALSE)
+indices <- createDataPartition(df$generated, p = pourcentage, list = FALSE)
 
 # df_train <- df_plus[indices, ]
 # df_test <- df_plus[-indices, ]
 
-df_train <- df_plus[indices, ]
-df_test <- df_plus[-indices, ]
+df_train <- df[indices, ]
+df_test <- df[-indices, ]
 
 
 # Afficher la taille des ensembles d'entraînement et de test
 cat("Taille de l'ensemble d'entraînement :", nrow(df_train), "\n")
 cat("Taille de l'ensemble de test :", nrow(df_test), "\n")
-
-dim(df_train[df_train$generated == 1,])
-dim(df_test[df_test$generated == 1,])
 ```
 
 #### Calculs de notre TF IDF
@@ -547,7 +582,7 @@ give_tfidf <- function(df_train, df_test, term_count_min){
 
   return(list(train = train_matrix, test = test_matrix))
 }
-tfidfs <- give_tfidf(df_train, df_test, 5)
+tfidfs <- give_tfidf(df_train, df_test, 50)
 
 df_train$tfidf <- tfidfs$train
 df_test$tfidf <- tfidfs$test
@@ -575,6 +610,17 @@ summary(df_train_afd[, c("generated", "p_nbr", "p_moy_chars", "read_score", "pon
 
 ```
 
+```{r}
+df_train_afd <- as.data.frame(df_train$tfidf)
+df_train_afd$generated <- df_train$generated
+
+df_test_afd <- as.data.frame(df_test$tfidf)
+df_test_afd$generated <- df_test$generated
+
+dim(df_train_afd)
+dim(df_test_afd)
+```
+
 Explication de l AFD, y compris les fondements mathématiques et l application à 
 l ensemble de données
 
@@ -588,41 +634,64 @@ num_components <- ncol(predict(model_lda)$x)
 # Utiliser les résultats du modèle LDA pour sélectionner toutes les composantes discriminantes
 selected_lda_components <- predict(model_lda)$x[, 1:num_components]
 
+
 # Ajouter la variable cible au nouveau jeu de données
 df_selected_components <- data.frame(selected_lda_components, generated = df_train_afd$generated)
 
 # Résumé des composantes discriminantes sélectionnées
 head(df_selected_components)
 ```
-```{r}
-df_train_afd_with_tfidf <- cbind(df_train_afd, tfidf = df_train$tfidf)
 
-model_bayes <- naiveBayes(generated ~ ., data = df_train_afd_with_tfidf)
+```{r}
+
+predicted_lda_test <- predict(model_lda, newdata = df_test_afd)
+
+predicted_lda_components_test <- predicted_lda_test$x[, 1:num_components]
+
+df_test_components <- data.frame(predicted_lda_components_test, generated = df_test_afd$generated)
+
+```
+
+
+
+## 5. Classification bayésienne
+
+
+```{r}
+df_selected_components$p_nbr <- df_train$p_nbr
+df_selected_components$p_moy_chars <- df_train$p_moy_chars
+df_selected_components$read_score <- df_train$read_score
+df_selected_components$ponct_count <- df_train$ponct_count
+df_selected_components$ponct_ratio <- df_train$ponct_rati
+
+df_test_components$p_nbr <- df_test$p_nbr
+df_test_components$p_moy_chars <- df_test$p_moy_chars
+df_test_components$read_score <- df_test$read_score
+df_test_components$ponct_count <- df_test$ponct_count
+df_test_components$ponct_ratio <- df_test$ponct_ratio
+
+
+
+
+model_bayes <- naiveBayes(generated ~ ., data = df_selected_components)
 summary(model_bayes)
 
+```
 
-
+```{r}
 predictions <- predict(model_bayes, newdata = df_test_afd)
 
 accuracy <- sum(predictions == df_test_afd$generated) / length(df_test_afd$generated)
 accuracy
 ```
+## 6. Conclusion
 
+### Conclusion
 
-## 5. Classification bayésienne
+Nous obtenons une accuracy d environ 70%, ce montre que notre modèle fonctionne bien.
 
-Élaborer sur la méthodologie de classification bayésienne utilisée, y compris les 
-techniques avancées
+### Améliorations possibles
 
-## 6. Evaluation et résultats
-
-Discutez des mesures d évaluation du modèle et du processus de validation.
-
-## 7. Conclusion
-
-Résumer les principales constatations et conclusions tirées de l analyse
-
-## 8. Travaux futurs
-
-Mettez en évidence les domaines nécessitant des recherches plus approfondies, tels que 
-l amélioration du modèle ou l exploration de fonctionnalités alternatives. 
+Nous n'avons pas eu le temps de faire la validation croisé de manière convenable ainsi que la présentation des résultats.
+Nous nous sommes donc concentrés sur le travail en fouille et permettre d'obtenir le meilleur preprocessing car les aspects manquants 
+sont dévelopés dans d'autres matières. (en python).
