@@ -75,6 +75,10 @@ library(tm)
 library(text2vec)
 library(slam)
 
+library(MASS)
+library(e1071)
+
+
 ```
 
 #### Chargement des données
@@ -322,7 +326,6 @@ give_most_words <- function(df_tokens, col_names, n){
 result <- give_most_words(df[, c('token', 'generated')], 'token', 10)
 
 result$plot
-result1$plot
 ```
 
 __Explication :__
@@ -435,7 +438,7 @@ Nous utiliserons la librairie __stringr__ pour plus de simplicité
 
 ```{r}
 df$ponct_count <- str_count(df$text, "[[:punct:]]")
-head(df$)
+head(df$ponct_count)
 cat('Nombre moyennes des ponctuations écrites ', mean(df$ponct_count))
 ```
 
@@ -515,8 +518,8 @@ df_test <- df_plus[-indices, ]
 
 
 # Afficher la taille des ensembles d'entraînement et de test
-cat("Taille de l'ensemble d'entraînement :", nrow(train_data), "\n")
-cat("Taille de l'ensemble de test :", nrow(test_data), "\n")
+cat("Taille de l'ensemble d'entraînement :", nrow(df_train), "\n")
+cat("Taille de l'ensemble de test :", nrow(df_test), "\n")
 
 dim(df_train[df_train$generated == 1,])
 dim(df_test[df_test$generated == 1,])
@@ -593,7 +596,6 @@ head(df_selected_components)
 ```
 ```{r}
 df_train_afd_with_tfidf <- cbind(df_train_afd, tfidf = df_train$tfidf)
-library(e1071)
 
 model_bayes <- naiveBayes(generated ~ ., data = df_train_afd_with_tfidf)
 summary(model_bayes)
