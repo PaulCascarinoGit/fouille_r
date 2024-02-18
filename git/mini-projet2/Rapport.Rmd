@@ -327,19 +327,6 @@ result$plot
 
 Nous remarquons que nous avons rassembler des mots similaires entre eux.
 
-#### TF-IDF
-
-On a :
- $$
-\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
-$$
-avec 
-
-- N : le nombre documents total
-- df(t) : le nombre de documents comportant le terme t
-
-Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
-Cela correspond à l importance du mot dans notre corpus de documents.
 
 ##### TF-IDF
 

@@ -67,6 +67,14 @@ library(SnowballC)
 # Permet le calcul du score de lisibilité 
 library(quanteda.textstats)
 
+# Permet la séparation en donnés d'entrainements et de test
+library(caret)
+
+
+library(tm)
+library(text2vec)
+library(slam)
+
 ```
 
 #### Chargement des données
@@ -104,7 +112,10 @@ Nous avons :
 
 - "text" : le texte de l'essay    
 
-- "generated" : 0 si généré par Homme 1 si non 
+- "generated" : 0 si généré par Homme 1 si non, est une variable catégorielle =>
+```{r}
+df_essays$generated <- as.factor(df_essays$generated)
+```
 
 Dans l'exemple ci dessus (la première ligne), nous avons un texte écris en anglais 
 par un homme (generated  = 0)
@@ -401,7 +412,7 @@ cat('Nombre moyennes des phrases dans les essays : ',mean(df$p_nbr))
 ```{r}
 df$p_moy_chars <- sapply(df$phrases, function(phrases) mean(nchar(phrases)))
 head(df$p_moy_chars)
-cat('Nombre moyennes des caractèrespar phrases ', mean(df$p_moy_chars))
+cat('Nombre moyennes des caractères par phrases ', mean(df$p_moy_chars))
 ```
 
 #### Calcul des scores de lisibilités
@@ -416,19 +427,185 @@ cat('Nombre moyennes des scores de lisibilité ', mean(df$read_score))
 
 #### Regard sur les caractères non alphanumérique
 
+Nous voullons aussi regarder si la ponctuation et le nombre de caractères utilisés nous
+donnerai des information quant à la différences des écrits humain et des IA.
+
+Nous pouvons ainsi compter le nombre de caractères émis : 
+Nous utiliserons la librairie __stringr__ pour plus de simplicité
+
+```{r}
+df$ponct_count <- str_count(df$text, "[[:punct:]]")
+head(df$)
+cat('Nombre moyennes des ponctuations écrites ', mean(df$ponct_count))
+```
+
+Nous pouvons aussi faire un ration ponctuation / nombre de caractère
 
 
+
+```{r}
+df$ponct_ratio <- df$ponct_count / nchar(df$text)
+head(df$ponct_ratio)
+cat('Nombre moyennes des ponctuations / caractères ', mean(df$ponct_ratio))
+```
 
 ### Technique de vectorisation utilisée
 
-Discutez de la technique de vectorisation utilisée
+#### Explication
+
+Nous décidons d'effectuer une vectorisation par TF IDF car : 
+
+- Cela permet de réduire la dimensionnalité de notre texte
+ 
+- Identifier les termes important et ainsi pouvoir reconnaitre les redondances des IA par exemples
+
+- Réduire le bruits, les mots peu utilisés et non utiles
+
+On a :
+ $$
+\text{IDF}(t, D) = \log\left(\frac{N}{\text{df}(t)}\right)
+$$
+avec 
+
+- N : le nombre documents total
+- df(t) : le nombre de documents comportant le terme t
+
+Ainsi IDF(t,D) donne le poids IDF du terme t dans les documents de D.
+Cela correspond à l importance du mot dans notre corpus de documents.
+
+#### Suréchantillonnage
+
+Nous n avons pas beaucoup de données écrites par les IA, nous pouvons dupliquer leurs lignes 
+afin d'apporter un plus gros poids à celles ci.
+
+```{r}
+dim(df)
+
+
+set.seed(1)
+
+df_H <- df[df$generated == 0, ]
+df_IA <- df[df$generated == 1, ]
+
+# Calcul du facteur de duplication
+n <- nrow(df_H) / nrow(df_IA)
+
+
+df_IA_plus <- df_IA[rep(1:nrow(df_IA), times = ceiling(n)), ]
+
+df_plus <- rbind(df_H, df_IA_plus)
+dim(df_plus)
+
+```
+
+
+#### Séparation en données d'entrainements et de test
+```{r}
+set.seed(1)
+
+pourcentage <- 0.7
+
+indices <- createDataPartition(df_plus$generated, p = pourcentage, list = FALSE)
+
+# df_train <- df_plus[indices, ]
+# df_test <- df_plus[-indices, ]
+
+df_train <- df_plus[indices, ]
+df_test <- df_plus[-indices, ]
+
+
+# Afficher la taille des ensembles d'entraînement et de test
+cat("Taille de l'ensemble d'entraînement :", nrow(train_data), "\n")
+cat("Taille de l'ensemble de test :", nrow(test_data), "\n")
+
+dim(df_train[df_train$generated == 1,])
+dim(df_test[df_test$generated == 1,])
+```
+
+#### Calculs de notre TF IDF
+```{r}
+give_tfidf <- function(df_train, df_test, term_count_min){
+
+    # Créer un itoken
+  itoken_train <- itoken(df_train$stem)
+  itoken_test <- itoken(df_test$stem)
+  
+  # Créer le vocabulaire
+  vocabulary <- create_vocabulary(itoken_train)
+  vocabulary <- prune_vocabulary(vocabulary, term_count_min)
+
+  vectorizer <- vocab_vectorizer(vocabulary)
+
+  dtm_train <- create_dtm(itoken_train, vectorizer)
+  dtm_test <- create_dtm(itoken_test, vectorizer)
+
+  train_matrix <- as.matrix(as(dtm_train, "CsparseMatrix"))
+  test_matrix <- as.matrix(as(dtm_test, "CsparseMatrix"))
+
+  return(list(train = train_matrix, test = test_matrix))
+}
+tfidfs <- give_tfidf(df_train, df_test, 5)
+
+df_train$tfidf <- tfidfs$train
+df_test$tfidf <- tfidfs$test
+```
+
 
 ## 4. Analyse des facteurs discriminants
 
 ### Explication de l AFD
 
+#### Résumé de nos colonnes
+
+```{r}
+colnames(df_train)
+```
+Nous avons un total de 14 colonnes pour l'instant. 
+
+Seulement de nombreuses sont la modifications d'autres réduisons cela popur éviter la redondances
+
+```{r}
+df_train_afd <- subset(df_train, select = c("generated", "p_nbr", "p_moy_chars", "read_score", "ponct_count", "ponct_ratio" ))
+df_test_afd <- subset(df_test, select = c("generated", "p_nbr", "p_moy_chars", "read_score", "ponct_count", "ponct_ratio" ))
+# Créer le sous-ensemble de colonnes sans la colonne tfidf et afficher le résumé statistique
+summary(df_train_afd[, c("generated", "p_nbr", "p_moy_chars", "read_score", "ponct_count", "ponct_ratio")])
+
+```
+
 Explication de l AFD, y compris les fondements mathématiques et l application à 
-l’ensemble de données
+l ensemble de données
+
+```{r}
+# Ajuster le modèle LDA sans spécifier le nombre de composantes
+model_lda <- lda(generated ~ ., data = df_train_afd)
+
+# Obtenir le nombre de composantes générées par le modèle
+num_components <- ncol(predict(model_lda)$x)
+
+# Utiliser les résultats du modèle LDA pour sélectionner toutes les composantes discriminantes
+selected_lda_components <- predict(model_lda)$x[, 1:num_components]
+
+# Ajouter la variable cible au nouveau jeu de données
+df_selected_components <- data.frame(selected_lda_components, generated = df_train_afd$generated)
+
+# Résumé des composantes discriminantes sélectionnées
+head(df_selected_components)
+```
+```{r}
+df_train_afd_with_tfidf <- cbind(df_train_afd, tfidf = df_train$tfidf)
+library(e1071)
+
+model_bayes <- naiveBayes(generated ~ ., data = df_train_afd_with_tfidf)
+summary(model_bayes)
+
+
+
+predictions <- predict(model_bayes, newdata = df_test_afd)
+
+accuracy <- sum(predictions == df_test_afd$generated) / length(df_test_afd$generated)
+accuracy
+```
+
 
 ## 5. Classification bayésienne
 
