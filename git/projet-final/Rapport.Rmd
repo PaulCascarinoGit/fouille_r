@@ -64,15 +64,10 @@ library(stopwords)
 # Permet la stemmatization : https://smltar.com/stemming#how-to-stem-text-in-r
 library(SnowballC)
 
-```
-__Explication :__
+# Permet le calcul du score de lisibilité 
+library(quanteda.textstats)
 
-3. `library(ggplot2)` charge le package `ggplot2` qui permet de créer 
-  facilement des graphiques en R
-4. `library(dplyr)` charge le package `dplyr` qui offre des fonctions
-  utiles et simples dans la manipulation de données
-5. `library(stringr)` charge le package `stringr` qui offre des fonctions
-  utiles dans la manipulation des chaînes de caractères
+```
 
 #### Chargement des données
 
@@ -83,8 +78,7 @@ path_essays <- 'datasets/llm-detect-ai-generated-text/train_essays.csv'
 path_prompts <- 'datasets/llm-detect-ai-generated-text/train_prompts.csv'
 
 df_essays <- read.csv(path_essays)
-#df_prompts <- read.csv(path_prompts)
-
+df_prompts <- read.csv(path_prompts)
 ```
 
 #### Description d essays : 
@@ -241,12 +235,189 @@ Nous avons :
 ```{r}
 dim(df_prompts)
 ```
+
+Après avoir passé __BEAUCOUP__ de temps à essayer de faire fonctionner 
+notre df_prompts correctement, nous nous apercevons qu'il y a beaucoup 
+de valeurs manquantes et nous pensons qu'il n'est pas nécessaire aux 
+méthodes que nous allons utiliser
+
+Ainsi nous avons pour plus de simplicité
+```{r}
+df <- df_essays
+```
+
 ### Etapes de prétraitements
+
+#### Nettoyage des données textuelles
+
+Nous avons 1 colonne avec des données textuelles non catégorielle : __text__
+
+Pour nétoyer nous allons créer une fonction qui vas : 
+- mettre tous les textes en minuscule
+- supprimer les chiffres
+- supprimer tous les caractères spéciaux
+- retirer les sauts de lignes
+
+```{r}
+clean_text <- function(df_col){
+  temp_col <- str_to_lower(df_col)
+  temp_col <- str_replace_all(temp_col, "'", " ") 
+  temp_col <- str_replace_all(temp_col, "[0-9]", "")
+  temp_col <- str_replace_all(temp_col, "[^[:alnum:][:space:]]", "")
+  temp_col <- str_replace_all(temp_col, "\n", "")
+
+  return(temp_col)
+}
+
+df$tidy <- clean_text(df$text)
+
+head(df$tidy)
+```
+
+La fonction __clean_text__ nous permet de supprimer les caractères non alphanumériques
+et les chiffres ainsi que de touus mettre en minuscule. 
+
+Nous pouvons maintenant apppliquer la Tokenization : 
+
+#### Tokenization
+
+https://smltar.com/tokenization
+
+Nous décidons dans un premier temps de faire une tokenization par mots car c est la méthode la 
+plus commune et que cela nous parait logique de travailler dans un premier temps avec les mots.
+
+De plus nous avons vu grâce au mini projet 1 que c'est la plus performante par rapports 
+à la tokenization par pluusieurs mots en terme d'accuracy : 
+
+```{r}
+df$token <- tokenize_words(df$tidy)
+
+df$token[1]
+```
+
+Nous pouvons maintenant observer les tokens les plus utilisés : 
+
+Utilisons la fonction du mini-projet 1 : 
+
+```{r}
+give_most_words <- function(df_tokens, col_names, n){
+  token_freq <- table(unlist(df_tokens[[col_names]]))
+  token_freq_df <- data.frame(token = names(token_freq), frequency = as.numeric(token_freq))
+  token_freq_df <- token_freq_df[order(-token_freq_df$frequency),]
+  plot <- ggplot(token_freq_df[0:n,], aes(x=reorder(token, -frequency), y=frequency)) +
+            geom_bar(stat = 'identity')
+  return(list(plot=plot, df=token_freq_df))
+}
+result <- give_most_words(df[, c('token', 'generated')], 'token', 10)
+
+result$plot
+result1$plot
+```
+
+__Explication :__
+
+Nous avons définit une fonction qui permet de retourner un graph des n premiers mots et longeurs
+fréquences d apparition dans notre df. 
+
+
+Nous remarquons que nous avons une liste de mots inutiles. Regardons maintenant les stop words : 
+
+##### Stop words
+
+Les __stop words__ sont les mots qui n ont pas d intérêts dans le sens de la phrase.
+Ansi les supprimer réduirait le nombre de feature et donc le nombre de calculs.
+Nous pouvons aussi penser que réduire les mots inutiles réduirait la performance de notre futur modèle.
+
+Pour cela nous allons utiliser une liste de stop words déjà faite,
+Nous allons donc utiliser la bibliothèque __snowball__.
+```{r}
+head(stopwords::stopwords(source = "snowball"))
+```
+
+
+```{r}
+cat("Nombre de mots des textes avant l'étape des stop words : ",
+sum(lengths(df$token)))
+
+df$stopwords <- sapply(df$token, function(x) setdiff(x, stopwords::stopwords(source = "snowball")))
+
+result <- give_most_words(df[, c('stopwords', 'generated')], 'stopwords', 10)
+
+result$plot
+
+
+cat("Nombre de mots des textes après l'étape des stop words : ",
+sum(lengths(df$stopwords)))
+
+```
+
+Nous venons de suupprimer les mots les plus inutiles qui sont dans la bibliothèque __smart__
+
+##### Stemming 
+
+Le stemming permet de rapprocher les mots similaires tel que 'feel' et 'feels' en un stem qui 
+est un mot de base (ex:'feel').
+
+```{r}
+df$stem <- lapply(df$stopwords, function(x) wordStem(x))
+
+result <- give_most_words(df[, c('stem', 'generated')], 'stem', 10)
+
+result$plot
+
+```
+
+Nous remarquons bien la différence après l étape du stemming et l appartition de nouveaux mots.
 
 
 ## 3. Extraction de caractéristiques (Feature Extraction)
 
 ### Caractéristiques linguistiques et stylométriques
+
+Regardons certaines caractéristiques qui pourraient différencier les écrits humains aux IA : 
+
+#### Calcul du nombre de phrase
+
+Pour cela nous splitons toous nos textes en phrase avec : 
+```{r}
+df$phrases <- lapply(strsplit(df$text, "[.!?]\\s|\n"), unlist)
+
+# Suppression des éléments vides
+df$phrases <- lapply(df$phrases, function(x) Filter(nzchar, x))
+
+head(df$phrases[1])
+```
+
+Ainsi il est simple d'avoir le nombre de phrase par essay avec 
+
+```{r}
+df$p_nbr <- sapply(df$phrases, length)
+head(df$p_nbr)
+cat('Nombre moyennes des phrases dans les essays : ',mean(df$p_nbr))
+```
+
+#### Calcul de la moyenne des longueurs des phrases
+
+```{r}
+df$p_moy_chars <- sapply(df$phrases, function(phrases) mean(nchar(phrases)))
+head(df$p_moy_chars)
+cat('Nombre moyennes des caractèrespar phrases ', mean(df$p_moy_chars))
+```
+
+#### Calcul des scores de lisibilités
+
+Nous pouvons aussi calculer le score de lisibilité avec la package __quanteda.textstats__.
+Cela peut peut être nous donner une information quant à la différences des écrits humain et des IA
+```{r}
+df$read_score <- textstat_readability(df$text)$Flesch
+head(df$read_score)
+cat('Nombre moyennes des scores de lisibilité ', mean(df$read_score))
+```
+
+#### Regard sur les caractères non alphanumérique
+
+
+
 
 ### Technique de vectorisation utilisée
 
